@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Post</title>
+    <link rel="stylesheet" href="/statics/comment.css">
+</head>
+
+<body>
+
+    <article class="post">
+        <header>
+            <h2>{{.Title}}</h2>
+            <p class="author">Posted by <strong>{{.AuthorName}}</strong> on {{.CreationDate}}</p>
+        </header>
+
+        <section class="content">
+            <p>{{.Content}}</p>
+        </section>
+
+        <footer>
+            <div class="categories">
+                {{range .Categories}}
+                <span class="tag">{{.}}</span>
+                {{end}}
+            </div>
+
+            <div class="actions">
+                <form method="POST" action="/reaction/">
+                    <input type="hidden" name="id" value="{{.Id}}">
+                    <input type="hidden" name="target" value="post">
+                    <input type="hidden" name="redirect" value="comment">
+                    <button type="submit" name="type" value="like">👍 {{.Likes}}</button>
+                    <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
+                </form>
+            </div>
+        </footer>
+    </article>
+
+    <hr>
+
+    <section class="add-comment">
+        <form method="POST" action="/posts/{{.Id}}">
+            <textarea name="content" rows="4" placeholder="Write a comment..." required></textarea>
+            <button type="submit">Comment</button>
+        </form>
+    </section>
+
+
+    <hr>
+
+    <section class="comments">
+        <h3>{{.CommentNumber}} Comments</h3>
+
+        {{range .Comments}}
+        <div class="comment">
+            <p class="author">{{.AuthorName}} said:</p>
+            <p class="content">{{.Content}}</p>
+            <div class="comment-actions">
+                <form method="POST" action="/reaction/">
+                    <input type="hidden" name="id" value="{{.Id}}">
+                    <input type="hidden" name="target" value="comment">
+                    <button type="submit" name="type" value="like">👍{{.Likes}}</button>
+                    <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
+                </form>
+            </div>
+        </div>
+        <hr>
+        {{end}}
+    </section>
+</body>
+
+</html>

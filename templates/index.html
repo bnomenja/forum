@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum</title>
+    <link rel="stylesheet" href="/statics/index.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <h1 class="logo">MyForum</h1>
+        <div class="nav-links">
+            {{if .UserName}}
+                <span class="welcome">👋 Welcome, <strong>{{.UserName}}</strong></span>
+                <a href="/create/post" class="btn btn-primary">Create Post</a>
+                <a href="/logout" class="btn btn-secondary">Logout</a>
+            {{else}}
+                <a href="/login" class="btn btn-primary">Login</a>
+                <a href="/login/register" class="btn btn-secondary">Register</a>
+            {{end}}
+        </div>
+    </nav>
+
+    <section class="filters">
+        <details>
+            <summary>🔍 Filters</summary>
+            <div class="filter-content">
+                {{if .UserName}}
+                <div class="filter-section">
+                    <h3>My Activity</h3>
+                    <div class="filter-links">
+                        <a href="/?filter=mine">My Posts</a>
+                        <a href="/?filter=liked">Liked Posts</a>
+                    </div>
+                </div>
+                {{end}}
+
+                <div class="filter-section">
+                    <h3>Categories to display</h3>
+                    <form method="GET" action="/">
+                        <div class="categories">
+                            <label><input type="checkbox" name="category" value="Technology"> Technology</label>
+                            <label><input type="checkbox" name="category" value="Science"> Science</label>
+                            <label><input type="checkbox" name="category" value="Art"> Art</label>
+                            <label><input type="checkbox" name="category" value="Gaming"> Gaming</label>
+                            <label><input type="checkbox" name="category" value="Other"> Other</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Apply</button>
+                    </form>
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <main class="container">
+        {{if .Posts}}
+            {{range .Posts}}
+            <article class="post">
+                <header>
+                    <h2><a href="/posts/{{.Id}}" class="post-title">{{.Title}}</a></h2>
+                    <p class="author">By <strong>{{.AuthorName}}</strong></p>
+                </header>
+
+                <section class="content">
+                    <p>{{.Content}}</p>
+                </section>
+
+                <footer>
+                    <div class="categories">
+                        {{range .Categories}}
+                            <span class="tag">{{.}}</span>
+                        {{end}}
+                    </div>
+
+                    <div class="actions">
+                        <form method="POST" action="/reaction/">
+                            <input type="hidden" name="id" value="{{.Id}}">
+                            <input type="hidden" name="target" value="post">
+                            <input type="hidden" name="redirect" value="home">
+                            <button type="submit" name="type" value="like">👍 {{.Likes}}</button>
+                            <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
+                        </form>
+                        <a href="/posts/{{.Id}}" class="comments-link">💬 {{.CommentNumber}}</a>
+                    </div>
+                </footer>
+            </article>
+            {{end}}
+        {{else}}
+            <p class="no-posts">No posts available at the moment.</p>
+        {{end}}
+    </main>
+</body>
+
+</html>
