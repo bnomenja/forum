@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 	"unicode"
 )
 
-func SetSession(userID int, db *sql.DB, w http.ResponseWriter) error {
+func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
 	sessionID, err := GenerateSessionID()
 	if err != nil {
 		return fmt.Errorf("failed to generate session id: %v", err)
@@ -36,21 +37,30 @@ func SetSession(userID int, db *sql.DB, w http.ResponseWriter) error {
 	return nil
 }
 
-func IsValidCredential(name, email, password string) error {
+func IsValidCredential(name, email, password string) string {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(email) == "" || strings.TrimSpace(password) == "" {
+		return "You must fill all the fields"
+	}
+
+	if !IsPrintable(name) || !IsPrintable(email) || !IsPrintable(password) {
+		return "Only printable characters are allowed as an input"
+	}
+
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 	if !emailRegex.MatchString(email) {
-		return fmt.Errorf("indalid mail")
+		return "Invalid email format"
 	}
 
 	if len(name) > 20 {
-		return fmt.Errorf("invalid name(too long)")
+		return "Username must be less than 20 characters"
 	}
 
-	for _, ch := range name {
-		if !unicode.IsPrint(ch) {
-			return fmt.Errorf("invalid name(only printable caracters are allowed)")
-		}
+	if len(password) < 8 {
+		return "Password must be at least 8 characters long"
+	}
+	if len(password) > 64 {
+		return "Password must be less than 64 characters"
 	}
 
 	haveNumber := false
@@ -73,9 +83,9 @@ func IsValidCredential(name, email, password string) error {
 		}
 	}
 
-	if !haveNumber && !haveUpper && !havelower {
-		return fmt.Errorf("invalid Password (must contain number, upper case and lower case character)")
+	if !haveNumber || !haveUpper || !havelower {
+		return "Invalid Password (must contain number, upper case and lower case character)"
 	}
 
-	return nil
+	return ""
 }

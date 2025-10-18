@@ -69,7 +69,7 @@ const (
 	Initialize              = `
 CREATE TABLE IF NOT EXISTS User (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name TEXT NOT NULL,
+    Name TEXT UNIQUE NOT NULL,
     Email TEXT UNIQUE NOT NULL,
     Password TEXT NOT NULL,
     Created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -139,14 +139,26 @@ func GenerateSessionID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func SetNewExpireDate(db *sql.DB, user_id int) (time.Time, error) {
+func SetNewExpireDate(w http.ResponseWriter, db *sql.DB, user_id int, session_id string) error {
 	newExp := time.Now().Add(24 * time.Hour)
 
 	_, err := db.Exec(updateExpireDate, newExp, user_id)
 	if err != nil {
-		return time.Time{}, err
+		return err
 	}
-	return newExp, nil
+
+	cookie := &http.Cookie{
+		Name:     "session",
+		Value:    session_id,
+		Path:     "/",
+		Expires:  newExp,
+		HttpOnly: true,
+		Secure:   false,
+	}
+
+	http.SetCookie(w, cookie)
+
+	return nil
 }
 
 // register
