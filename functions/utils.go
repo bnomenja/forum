@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type Database struct {
@@ -58,7 +59,7 @@ const (
 	queryGetPostDetails     = `SELECT User_id, Title, Content, Created_at FROM Post WHERE Id = ?`
 	queryGetUserName        = `SELECT Name FROM User WHERE Id = ?`
 	queryGetPostCategories  = `SELECT Category_id FROM Post_Category WHERE Post_id = ?`
-	queryGetPostComments    = `SELECT Id, User_id, Content, Created_at FROM Comment WHERE Post_id = ?`
+	queryGetPostComments    = `SELECT Id, User_id, Content, Created_at FROM Comment WHERE Post_id = ? ORDER BY Created_at DESC`
 	queryGetCategoryType    = `SELECT Type FROM Category WHERE Id = ?`
 	queryInsertComment      = `INSERT INTO Comment(Post_id, User_id, content) VALUES (?, ?, ?)`
 	updateExpireDate        = `UPDATE Session SET Expires_at = ? WHERE Id = ?`
@@ -161,12 +162,6 @@ func SetNewExpireDate(w http.ResponseWriter, db *sql.DB, user_id int, session_id
 	return nil
 }
 
-// register
-
-func logError(context string, err error) {
-	fmt.Printf("[ERROR] %s: %v\n", context, err)
-}
-
 // post
 func (database Database) authenticateUser(r *http.Request) (int, error) {
 	cookie, err := r.Cookie("session")
@@ -201,10 +196,11 @@ func extractPostID(path string) (int, error) {
 
 func (database Database) getPostWithDetails(postID int) (*Post, error) {
 	post, err := database.getPostBasicInfo(postID)
-	post.Id = postID
 	if err != nil {
 		return nil, err
 	}
+
+	post.Id = postID
 
 	if err := database.getPostAuthor(post, post.AuthorId); err != nil {
 		return nil, err
@@ -367,19 +363,15 @@ func (database Database) scanComment(rows *sql.Rows) (Comment, error) {
 	}, nil
 }
 
-func (database Database) handlePostRetrievalError(w http.ResponseWriter, err error) {
-	if err.Error() == "post not found" {
-		RenderError(w, errPageNotFound, http.StatusNotFound)
-		return
+func isValidInput(input string) bool {
+	if strings.TrimSpace(input) == "" {
+		return false
 	}
-	logError("Failed to retrieve post", err)
-	RenderError(w, errPleaseTryLater, http.StatusInternalServerError)
-}
 
-func (database Database) insertComment(postID, userID int, content string) error {
-	_, err := database.Db.Exec(queryInsertComment, postID, userID, content)
-	if err != nil {
-		return fmt.Errorf("failed to execute insert: %w", err)
+	for _, ch := range input {
+		if !unicode.IsPrint(ch) {
+			return false
+		}
 	}
-	return nil
+	return true
 }

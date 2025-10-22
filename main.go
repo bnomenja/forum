@@ -38,7 +38,7 @@ func main() {
 
 	http.HandleFunc("/", database.Home)
 	http.HandleFunc("/login", database.Login)
-	http.HandleFunc("/login/register", database.Register)
+	http.HandleFunc("/register", database.Register)
 	http.HandleFunc("/logout", database.Logout)
 	http.HandleFunc("/create/post", database.CreatePosts)
 	http.HandleFunc("/posts/", database.CreateComment)
