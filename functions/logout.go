@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 	"net/http"
-	"time"
 )
 
 func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
@@ -33,16 +32,7 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleteCookie := &http.Cookie{
-		Name:     "session",
-		Value:    "",
-		Path:     "/",
-		Expires:  time.Now().Add(-1 * time.Hour),
-		HttpOnly: true,
-		Secure:   false,
-	}
-
-	http.SetCookie(w, deleteCookie)
+	RemoveCookie(w)
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

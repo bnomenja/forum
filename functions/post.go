@@ -1,8 +1,10 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
@@ -22,7 +24,12 @@ func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
 		ExecuteTemplate(w, "post.html", nil, 200)
 
 	case http.MethodPost:
-		HandleCreatePost(w, r, &database, user_id)
+		code, err := HandleCreatePost(w, r, &database, user_id)
+		if err != nil {
+			RenderError(w, err.Error(), code)
+			return
+		}
+
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 
 	default:
@@ -30,7 +37,7 @@ func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database, user_id int) {
+func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database, user_id int) (int, error) {
 	db := database.Db
 
 	r.ParseForm()
@@ -39,41 +46,43 @@ func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database
 	content := r.FormValue("content")
 	Categories := r.Form["categories"]
 
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return 400, errors.New("please fill all the required field when you create a post")
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		fmt.Println("cannot initialize transaction", err)
-		RenderError(w, "failed to create the post", 500)
-		return
+		return 500, errors.New("failed to create the post")
 	}
 
 	res, err := tx.Exec("INSERT INTO Post(User_id, Title, Content) VALUES (?,?,?)", user_id, title, content)
 	if err != nil {
 		fmt.Println("failed to insert the post in his database", err)
-		RenderError(w, "failed to create the post", 500)
 		tx.Rollback()
-		return
+		return 500, errors.New("failed to create the post")
 	}
 
 	postId, err := res.LastInsertId()
 	if err != nil {
 		fmt.Println("failed to get the post Id from his database", err)
-		RenderError(w, "failed to create the post", 500)
 		tx.Rollback()
-		return
+		return 500, errors.New("failed to create the post")
 	}
 
 	categories_id, err := getCategoriesId(Categories, tx)
 	if err != nil {
 		fmt.Println(err)
 		tx.Rollback()
-		RenderError(w, "failed to create category", 500)
-		return
+		return 500, errors.New("failed to create the post")
 	}
 
 	if err := insertInPost_Category(tx, int(postId), categories_id); err != nil {
 		fmt.Println(err)
-		RenderError(w, "failed to create the post", 500)
 		tx.Rollback()
-		return
+		return 500, errors.New("failed to create the post")
+
 	}
+
+	return -1, nil
 }

@@ -92,6 +92,14 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		return
 	}
 
+	// delete all user previous session
+	_, err = db.Exec("DELETE FROM Session WHERE User_id = ?", User_id)
+	if err != nil {
+		fmt.Println(err)
+		RenderError(w, "please try later", 500)
+		return
+	}
+
 	var session_id string
 	err = db.QueryRow("SELECT Id FROM Session WHERE User_id = ?", User_id).Scan(&session_id)
 
@@ -182,56 +190,62 @@ func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType strin
 	}
 }
 
+// Get post based on the filter(created/liked/categories)
 func GetAllPosts(db *sql.DB, categories []string, UserId int, filter string) ([]Post, error) {
 	posts := []Post{}
 	var rows *sql.Rows
 	var err error
 
-	switch filter {
-	case "mine":
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "mine": // only get the post created by the user
 		rows, err = db.Query("SELECT * FROM Post WHERE User_id = ? ORDER BY Created_at DESC", UserId)
-	case "liked":
+
+	case "liked": // only get posts liked by the user. Disliked posts won't be retrieved (we can change this later if we decide to filter by reacted posts)
 		rows, err = db.Query(`
 			SELECT p.*
 			FROM Post p
 			INNER JOIN Reaction r ON p.Id = r.Post_id
-			WHERE r.User_id = ? AND r.Is_like = ?
+			WHERE r.User_id = ? AND r.Is_like = true
 			ORDER BY p.Created_at DESC
-		`, UserId, true)
-	default:
+		`, UserId)
+
+	default: // get all the posts
 		rows, err = db.Query("SELECT * FROM Post ORDER BY Created_at DESC")
 	}
 
 	if err != nil {
-		return posts, fmt.Errorf("failed to query posts: %v", err)
+		return posts, fmt.Errorf("failed to int query for retrieving posts: %v", err)
 	}
 
 	defer rows.Close()
+	allowed := map[string]bool{}
+
+	for _, category := range categories {
+		allowed[category] = true
+	}
 
 	for rows.Next() {
 		var post Post
+
+		// getting basic data from post that match 'filter'
 		err := rows.Scan(&post.Id, &post.AuthorId, &post.Title, &post.Content, &post.CreationDate)
 		if err != nil {
 			return posts, fmt.Errorf("failed to read rows: %v", err)
 		}
 
-		if err := GetAllCategories(db, &post); err != nil {
+		if err := GetPostCategories(db, &post); err != nil {
 			return posts, fmt.Errorf("failed to get categories of post %v", post.Id)
 		}
 
 		if len(categories) > 0 {
 			matches := false
 			for _, postCategory := range post.Categories {
-				for _, filterCategory := range categories {
-					if postCategory == filterCategory {
-						matches = true
-						break
-					}
-				}
-				if matches {
+				if allowed[postCategory] {
+					matches = true
 					break
 				}
 			}
+
 			if !matches {
 				continue
 			}

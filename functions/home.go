@@ -32,6 +32,11 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 	categories := r.Form["category"]
 
+	if !AreValidCategories(categories) {
+		RenderError(w, "unknown category", 400)
+		return
+	}
+
 	posts, err := GetAllPosts(db, categories, user_id, filter)
 	if err != nil {
 		fmt.Println("failed to load posts in home", err)

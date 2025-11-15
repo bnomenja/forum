@@ -638,7 +638,7 @@ func GetReactionNumber(db *sql.DB, post *Post) error {
 	return nil
 }
 
-func GetAllCategories(db *sql.DB, post *Post) error {
+func GetPostCategories(db *sql.DB, post *Post) error {
 	categories_id, err := GetCategoriesId(db, post)
 	if err != nil {
 		return err
@@ -692,25 +692,36 @@ func GetCategoriesId(db *sql.DB, post *Post) ([]int, error) {
 	return Categories_id, nil
 }
 
+// Check if the user is loged to have his name and handle all errors related to that
 func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageData, int, error) {
 	var data PageData
 	var user_id int
 
 	cookie, err := r.Cookie("session")
-	if err != nil {
-		if err.Error() == "http: named cookie not present" {
-		} else {
-			fmt.Println("error getting cookie in home", err)
-			RenderError(w, "please try later", 500)
-			return PageData{}, -1, err
-		}
-	} else {
+
+	switch err {
+
+	case nil: // user have a cookie
 		Session_ID := cookie.Value
 
 		err = db.QueryRow("SELECT User_id FROM Session WHERE Id = ? AND Expires_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id)
+
+		if err == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
+			_, err = db.Exec(queryDeleteSession, Session_ID)
+			if err != nil { 
+				fmt.Println(err)
+				RenderError(w, "please try later", 500)
+				return PageData{}, -1, err
+			}
+
+			RemoveCookie(w)
+
+			return data, user_id, nil
+		}
+
 		if err != nil {
 			fmt.Println(err)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			RenderError(w, "please try later", 500)
 			return PageData{}, -1, err
 		}
 
@@ -723,7 +734,43 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageDat
 		}
 
 		data.UserName = user_name
+
+	case http.ErrNoCookie: // user doesn't have a cookie -> user is a guest
+
+	default: // something wrong happened
+		fmt.Println("error getting cookie in home", err)
+		RenderError(w, "please try later", 500)
+		return PageData{}, -1, err
 	}
 
 	return data, user_id, nil
+}
+
+func RemoveCookie(w http.ResponseWriter) {
+	deleteCookie := &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+	}
+
+	http.SetCookie(w, deleteCookie)
+}
+
+func AreValidCategories(categories []string) bool {
+	if len(categories) == 0 {
+		return true
+	}
+
+	allowed := map[string]bool{"Technology": true, "Science": true, "Art": true, "Gaming": true, "Other": true}
+
+	for _, category := range categories {
+		if !allowed[(strings.TrimSpace(category))] {
+			return false
+		}
+	}
+
+	return true
 }
