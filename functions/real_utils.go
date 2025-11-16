@@ -60,18 +60,18 @@ const (
 	queryAddUser            = `INSERT INTO User (name, email, password) VALUES (?, ?, ?)`
 	queryGetUserIDByEmail   = `SELECT id FROM User WHERE email = ?`
 	queryGetUserIDBySession = `SELECT User_id FROM Session WHERE Id = ? AND Expires_at > CURRENT_TIMESTAMP`
-	queryGetPostDetails     = `SELECT User_id, Title, Content, Created_at FROM Post WHERE Id = ?`
-	queryGetUserName        = `SELECT Name FROM User WHERE Id = ?`
-	queryGetPostCategories  = `SELECT Category_id FROM Post_Category WHERE Post_id = ?`
-	queryGetPostComments    = `SELECT Id, User_id, Content, Created_at FROM Comment WHERE Post_id = ? ORDER BY Created_at DESC`
-	queryGetCategoryType    = `SELECT Type FROM Category WHERE Id = ?`
-	queryInsertComment      = `INSERT INTO Comment(Post_id, User_id, content) VALUES (?, ?, ?)`
-	updateExpireDate        = `UPDATE Session SET Expires_at = ? WHERE Id = ?`
-	addCookie               = `INSERT INTO Session(Id, User_id, Expires_at) VALUES (?, ?, ?)`
-	errPageNotFound         = "Page not found"
-	errMethodNotAllowed     = "Method not allowed"
-	errPleaseTryLater       = "Please try later"
-	Initialize              = `
+
+	queryGetUserName       = `SELECT Name FROM User WHERE Id = ?`
+	queryGetPostCategories = `SELECT Category_id FROM Post_Category WHERE Post_id = ?`
+	queryGetPostComments   = `SELECT Id, User_id, Content, Created_at FROM Comment WHERE Post_id = ? ORDER BY Created_at DESC`
+	queryGetCategoryType   = `SELECT Type FROM Category WHERE Id = ?`
+	queryInsertComment     = `INSERT INTO Comment(Post_id, User_id, content) VALUES (?, ?, ?)`
+	updateExpireDate       = `UPDATE Session SET Expires_at = ? WHERE Id = ?`
+	addCookie              = `INSERT INTO Session(Id, User_id, Expires_at) VALUES (?, ?, ?)`
+	errPageNotFound        = "Page not found"
+	errMethodNotAllowed    = "Method not allowed"
+	errPleaseTryLater      = "Please try later"
+	Initialize             = `
 CREATE TABLE IF NOT EXISTS User (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     Name TEXT UNIQUE NOT NULL,
@@ -133,6 +133,22 @@ CREATE TABLE IF NOT EXISTS Reaction (
     CONSTRAINT unique_reaction UNIQUE (User_id, Post_id, Comment_id)
 );
 `
+	queryGetPostDetails = `
+	SELECT p.User_id, p.Title, p.Content, p.Created_at , u.Name
+	FROM Post p
+	Join User u On u.Id = p.User_id
+	WHERE p.Id = ?
+	`
+
+	queryGetcomment = `
+	SELECT c.Id, c.User_Id, c.Content, c.Created_at, u.Name,
+    (SELECT COUNT(*) FROM Reaction r WHERE r.Comment_id = c.Id AND r.Is_like = true),
+    (SELECT COUNT(*) FROM Reaction r WHERE r.Comment_id = c.Id AND r.Is_like = false)
+	FROM Comment c
+	JOIN User u ON u.Id = c.User_Id
+	WHERE c.Post_Id = ?
+	ORDER BY c.Created_at DESC;
+`
 )
 
 func GenerateSessionID() (string, error) {
@@ -167,14 +183,14 @@ func SetNewExpireDate(w http.ResponseWriter, db *sql.DB, user_id int, session_id
 }
 
 // post
-func (database Database) authenticateUser(r *http.Request) (int, error) {
+func authenticateUser(r *http.Request, db *sql.DB) (int, error) {
 	cookie, err := r.Cookie("session")
 	if err != nil {
 		return 0, fmt.Errorf("session cookie not found: %w", err)
 	}
 
 	var userID int
-	err = database.Db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID)
+	err = db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return 0, fmt.Errorf("invalid or expired session: %w", err)
 	}
@@ -203,182 +219,13 @@ func extractPostID(path string) (int, error) {
 	return postID, nil
 }
 
-func (database Database) getPostWithDetails(postID int) (*Post, error) {
-	post, err := database.getPostBasicInfo(postID)
-	if err != nil {
-		return nil, err
-	}
-
-	post.Id = postID
-
-	if err := database.getPostAuthor(post, post.AuthorId); err != nil {
-		return nil, err
-	}
-
-	if err := database.getPostCategories(post, postID); err != nil {
-		return nil, err
-	}
-
-	if err := database.getPostComments(post, postID); err != nil {
-		return nil, err
-	}
-
-	post.CommentNumber = len(post.Comments)
-
-	if err := database.Db.QueryRow("SELECT COUNT (*) FROM Reaction WHERE  Post_id = ? AND Is_like = ?", post.Id, true).Scan(&post.Likes); err != nil {
-		return nil, fmt.Errorf("failed to get comment likes number: %w", err)
-	}
-
-	if err := database.Db.QueryRow("SELECT COUNT (*) FROM Reaction WHERE  Post_id = ? AND Is_like = ?", post.Id, false).Scan(&post.Dislikes); err != nil {
-		return nil, fmt.Errorf("failed to get comment dislikes number: %w", err)
-	}
-
-	return post, nil
-}
-
-func (database Database) getPostBasicInfo(postID int) (*Post, error) {
-	var authorID int
-	var title, content string
-	var createdAt time.Time
-
-	err := database.Db.QueryRow(queryGetPostDetails, postID).Scan(&authorID, &title, &content, &createdAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("post not found")
-		}
-		return nil, fmt.Errorf("failed to query post: %w", err)
-	}
-
-	post := &Post{
-		Title:        title,
-		Content:      content,
-		AuthorId:     authorID,
-		CreationDate: createdAt,
-		Categories:   make([]string, 0),
-		Comments:     make([]Comment, 0),
-	}
-
-	return post, nil
-}
-
-func (database Database) getPostAuthor(post *Post, authorID int) error {
-	err := database.Db.QueryRow(queryGetUserName, authorID).Scan(&post.AuthorName)
-	if err != nil {
-		return fmt.Errorf("failed to get author name: %w", err)
-	}
-	return nil
-}
-
-func (database Database) getPostCategories(post *Post, postID int) error {
-	rows, err := database.Db.Query(queryGetPostCategories, postID)
-	if err != nil {
-		return fmt.Errorf("failed to query categories: %w", err)
-	}
-	defer rows.Close()
-
-	categoryIDs := make([]int, 0)
-	for rows.Next() {
-		var categoryID int
-		if err := rows.Scan(&categoryID); err != nil {
-			return fmt.Errorf("failed to scan category ID: %w", err)
-		}
-		categoryIDs = append(categoryIDs, categoryID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating categories: %w", err)
-	}
-
-	return database.getCategoryNames(post, categoryIDs)
-}
-
-func (database Database) getCategoryNames(post *Post, categoryIDs []int) error {
-	if len(categoryIDs) == 0 {
-		return nil
-	}
-
-	stmt, err := database.Db.Prepare(queryGetCategoryType)
-	if err != nil {
-		return fmt.Errorf("failed to prepare category statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, categoryID := range categoryIDs {
-		var categoryType string
-		if err := stmt.QueryRow(categoryID).Scan(&categoryType); err != nil {
-			return fmt.Errorf("failed to get category type for ID %d: %w", categoryID, err)
-		}
-		post.Categories = append(post.Categories, categoryType)
-	}
-
-	return nil
-}
-
-func (database Database) getPostComments(post *Post, postID int) error {
-	rows, err := database.Db.Query(queryGetPostComments, postID)
-	if err != nil {
-		return fmt.Errorf("failed to query comments: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		comment, err := database.scanComment(rows)
-		if err != nil {
-			return err
-		}
-		post.Comments = append(post.Comments, comment)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating comments: %w", err)
-	}
-
-	return nil
-}
-
-func (database Database) scanComment(rows *sql.Rows) (Comment, error) {
-	var commentId int
-	var userID int
-	var content string
-	var createdAt time.Time
-
-	if err := rows.Scan(&commentId, &userID, &content, &createdAt); err != nil {
-		return Comment{}, fmt.Errorf("failed to scan comment: %w", err)
-	}
-
-	var authorName string
-	if err := database.Db.QueryRow(queryGetUserName, userID).Scan(&authorName); err != nil {
-		return Comment{}, fmt.Errorf("failed to get comment author name: %w", err)
-	}
-
-	likes := 0
-	dislikes := 0
-	if err := database.Db.QueryRow("SELECT COUNT(*) FROM Reaction WHERE Comment_id = ? AND Is_like = ?", commentId, true).Scan(&likes); err != nil {
-		return Comment{}, fmt.Errorf("failed to get comment likes number: %w", err)
-	}
-
-	if err := database.Db.QueryRow("SELECT COUNT(*) FROM Reaction WHERE Comment_id = ? AND Is_like = ?", commentId, false).Scan(&dislikes); err != nil {
-		return Comment{}, fmt.Errorf("failed to get comment dislikes number: %w", err)
-	}
-
-	return Comment{
-		Id:           commentId,
-		AuthorId:     userID,
-		AuthorName:   authorName,
-		Content:      content,
-		CreationDate: createdAt,
-		Likes:        likes,
-		Dislikes:     dislikes,
-	}, nil
-}
-
 func isValidComment(content string) error {
 	if strings.TrimSpace(content) == "" {
 		return errors.New("comment must not be empty")
 	}
 
 	if len(content) > 1000 {
-		return errors.New("maximum chatacters for a comment is 1000")
+		return errors.New("maximum characters for a comment is 1000")
 	}
 
 	for _, ch := range content {
@@ -386,7 +233,7 @@ func isValidComment(content string) error {
 			return errors.New("only printable characters are allowed")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -653,24 +500,6 @@ func GetReactionNumber(db *sql.DB, post *Post) error {
 	return nil
 }
 
-func GetPostCategories(db *sql.DB, post *Post) error {
-	categories_id, err := GetCategoriesId(db, post)
-	if err != nil {
-		return err
-	}
-
-	for _, category_id := range categories_id {
-		var category string
-		err := db.QueryRow("SELECT Type FROM Category WHERE Id = ?", category_id).Scan(&category)
-		if err != nil {
-			return err
-		}
-		post.Categories = append(post.Categories, category)
-	}
-
-	return nil
-}
-
 func GetCommentNumber(db *sql.DB, post *Post) error {
 	err := db.QueryRow("SELECT COUNT(*) FROM Comment WHERE Post_id = ?", post.Id).Scan(&post.CommentNumber)
 	if err != nil {
@@ -685,26 +514,6 @@ func GetAuthorName(db *sql.DB, post *Post) error {
 		return err
 	}
 	return nil
-}
-
-func GetCategoriesId(db *sql.DB, post *Post) ([]int, error) {
-	var Categories_id []int
-	rows, err := db.Query("SELECT Category_id FROM Post_Category WHERE Post_id = ?", post.Id)
-	if err != nil {
-		return Categories_id, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var Category_id int
-		err := rows.Scan(&Category_id)
-		if err != nil {
-			return Categories_id, err
-		}
-		Categories_id = append(Categories_id, Category_id)
-	}
-
-	return Categories_id, nil
 }
 
 // Check if the user is loged to have his name and handle all errors related to that
@@ -827,4 +636,124 @@ func isValidPost(title, content string, categories []string) error {
 	}
 
 	return nil
+}
+
+func getPosReactions(post *Post, db *sql.DB) error {
+	queryGetPostReaction := `
+	SELECT
+		(SELECT COUNT(*) FROM Reaction r WHERE r.Post_id = ? AND r.Is_like = 1),
+		(SELECT COUNT(*) FROM Reaction r WHERE r.Post_id = ? AND r.Is_like = 0)
+	`
+	err := db.QueryRow(queryGetPostReaction, post.Id, post.Id).Scan(&post.Likes, &post.Dislikes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
+	var authorID int
+	var authorName string
+	var title, content string
+	var createdAt time.Time
+
+	err := db.QueryRow(queryGetPostDetails, postID).Scan(&authorID, &title, &content, &createdAt, &authorName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("post not found")
+		}
+		return nil, fmt.Errorf("failed to query post: %w", err)
+	}
+
+	post := &Post{
+		Id:           postID,
+		AuthorId:     authorID,
+		AuthorName:   authorName,
+		Title:        title,
+		Content:      content,
+		CreationDate: createdAt,
+		Categories:   make([]string, 0),
+		Comments:     make([]Comment, 0),
+	}
+
+	return post, nil
+}
+
+func getPostCategories(post *Post, db *sql.DB) error {
+	query1 := `
+	SELECT c.Type
+	FROM Category c
+	Join Post_Category pc ON pc.Category_id = c.Id
+	WHERE Post_id = ?
+	`
+	rows, err := db.Query(query1, post.Id)
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var category string
+
+		err = rows.Scan(&category)
+		if err != nil {
+			return err
+		}
+
+		post.Categories = append(post.Categories, category)
+	}
+
+	return nil
+}
+
+func getPostComments(post *Post, db *sql.DB) error {
+	rows, err := db.Query(queryGetcomment, post.Id)
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		newcomment := Comment{}
+
+		err := rows.Scan(
+			&newcomment.Id,
+			&newcomment.AuthorId,
+			&newcomment.Content,
+			&newcomment.CreationDate,
+			&newcomment.AuthorName,
+			&newcomment.Likes,
+			&newcomment.Dislikes,
+		)
+		if err != nil {
+			return err
+		}
+
+		post.Comments = append(post.Comments, newcomment)
+
+	}
+
+	post.CommentNumber = len(post.Comments)
+
+	return nil
+}
+
+func getPost(postId int, db *sql.DB) (*Post, error) {
+	post, err := getPostBasicInfo(postId, db)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := getPostCategories(post, db); err != nil {
+		return nil, err
+	}
+
+	if err := getPosReactions(post, db); err != nil {
+		return nil, err
+	}
+
+	return post, nil
 }

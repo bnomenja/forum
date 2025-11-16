@@ -6,8 +6,6 @@ import (
 )
 
 func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
-	db := database.Db
-
 	if r.URL.Path != "/logout" {
 		RenderError(w, "Page not found", 404)
 		return
@@ -24,7 +22,7 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(queryDeleteSession, cookie.Value)
+	_, err = database.Db.Exec(queryDeleteSession, cookie.Value)
 	if err != nil {
 		fmt.Println(err)
 		RenderError(w, "please try later", 500)

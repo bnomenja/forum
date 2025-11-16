@@ -16,9 +16,7 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := database.Db
-
-	data, user_id, err := InitializeData(w, r, db)
+	data, user_id, err := InitializeData(w, r, database.Db)
 	if err != nil {
 		return
 	}
@@ -37,7 +35,7 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, err := GetAllPosts(db, categories, user_id, filter)
+	posts, err := GetFilteredPosts(database.Db, categories, user_id, filter)
 	if err != nil {
 		fmt.Println("failed to load posts in home", err)
 		RenderError(w, errPleaseTryLater, 500)

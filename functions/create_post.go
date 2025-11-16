@@ -12,8 +12,8 @@ func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user_id, err := database.authenticateUser(r) // user need to be loged to create post
-	if user_id == -1 { // something wrong happened
+	user_id, err := authenticateUser(r, database.Db) // user need to be loged to create post
+	if user_id == -1 {                               // something wrong happened
 		RenderError(w, "please try later", 500)
 		return
 	}
@@ -25,10 +25,10 @@ func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		ExecuteTemplate(w, "post.html", nil, 200) // just serving the create post page 
+		ExecuteTemplate(w, "post.html", nil, 200) // just serving the create post page
 
 	case http.MethodPost:
-		code, err := HandleCreatePost(w, r, &database, user_id) 
+		code, err := HandleCreatePost(w, r, &database, user_id)
 		if err != nil {
 			RenderError(w, err.Error(), code)
 			return
@@ -49,7 +49,6 @@ func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database
 	title := r.FormValue("title")
 	content := r.FormValue("content")
 	Categories := r.Form["categories"]
-	
 
 	err := isValidPost(title, content, Categories)
 	if err != nil {

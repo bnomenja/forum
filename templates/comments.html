@@ -44,7 +44,7 @@
 
     <section class="add-comment">
         <form method="POST" action="/posts/{{.Id}}">
-            <textarea name="content" rows="4" placeholder="Write a comment..." required></textarea>
+            <textarea name="content" rows="4" placeholder="Write a comment..." maxlength="1000" required></textarea>
             <button type="submit">Comment</button>
         </form>
     </section>

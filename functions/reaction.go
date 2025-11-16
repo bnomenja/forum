@@ -7,8 +7,6 @@ import (
 )
 
 func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
-	db := database.Db
-
 	if r.URL.Path != "/reaction/" {
 		RenderError(w, errPageNotFound, 404)
 		return
@@ -19,8 +17,8 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := database.authenticateUser(r) // only authenticated user can react
-	if userID == -1 {                           // something wrong happened
+	userID, err := authenticateUser(r, database.Db) // only authenticated user can react
+	if userID == -1 {                               // something wrong happened
 		RenderError(w, "please try later", 500)
 		return
 	}
@@ -46,16 +44,16 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetId := getTargetId(target, id, w, db) // ID start at one
+	targetId := getTargetId(target, id, w, database.Db) // ID start at one
 	if targetId < 1 {
 		return
 	}
 
-	err = HandleReaction(db, userID, targetId, target, reactionType)
+	err = HandleReaction(database.Db, userID, targetId, target, reactionType)
 	if err != nil {
 		RenderError(w, "please try later", 500)
 	}
 
 	// we redirect the user in the same page were he reacted (home page / comment page)
-	Redirect(target, targetId, w, r, db)
+	Redirect(target, targetId, w, r, database.Db)
 }
