@@ -3,6 +3,7 @@ package functions
 import (
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
@@ -18,9 +19,13 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := database.authenticateUser(r)
-	if err != nil {
-		fmt.Println("User authentication failed", err)
+	userID, err := database.authenticateUser(r) // only authenticated user can react
+	if userID == -1 {                           // something wrong happened
+		RenderError(w, "please try later", 500)
+		return
+	}
+
+	if err != nil { // the user is not loged
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -31,18 +36,18 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := r.FormValue("target")
-	id := r.FormValue("id")
-	reactionType := r.FormValue("type")
+	target := strings.TrimSpace(r.FormValue("target"))
+	id := strings.TrimSpace(r.FormValue("id"))
+	reactionType := strings.TrimSpace(r.FormValue("type"))
 
-	if reactionType != "like" && reactionType != "dislike" {
+	if reactionType != "like" && reactionType != "dislike" { // only like and dislike are allowed
 		fmt.Println("unknown reaction", err)
 		RenderError(w, "bad request", 400)
 		return
 	}
 
-	targetId := getTargetId(target, id, w, db)
-	if targetId < 0 {
+	targetId := getTargetId(target, id, w, db) // ID start at one
+	if targetId < 1 {
 		return
 	}
 
@@ -51,5 +56,6 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		RenderError(w, "please try later", 500)
 	}
 
+	// we redirect the user in the same page were he reacted (home page / comment page)
 	Redirect(target, targetId, w, r, db)
 }

@@ -20,7 +20,6 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie("session")
 	if err != nil {
-		fmt.Println(err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}

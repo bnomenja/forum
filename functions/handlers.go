@@ -131,7 +131,12 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 func (database Database) handleComment(w http.ResponseWriter, r *http.Request, post *Post) {
 	userID, err := database.authenticateUser(r)
-	if err != nil {
+	if userID == -1 { // something wrong happened
+		RenderError(w, "please try later", 500)
+		return
+	}
+
+	if err != nil { // the user is not loged
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -143,8 +148,9 @@ func (database Database) handleComment(w http.ResponseWriter, r *http.Request, p
 	}
 
 	content := strings.TrimSpace(r.FormValue("content"))
-	if !isValidInput(content) {
-		RenderError(w, "Invalid comment", http.StatusBadRequest)
+	
+	if err := isValidComment(content); err != nil {
+		RenderError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -158,34 +164,37 @@ func (database Database) handleComment(w http.ResponseWriter, r *http.Request, p
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
 
+// Insert the reaction in the reaction table and return an error if something wrong happened
 func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType string) error {
-	isLike := (reactionType == "like")
-	targetColumn := "Post_id"
+	isLike := (reactionType == "like") // check if we have a like or a dislike
+	targetColumn := "Post_id"          // if reacted on a post
 	if target == "comment" {
-		targetColumn = "Comment_id"
+		targetColumn = "Comment_id" // if reacted on a comment
 	}
 
 	var reactionID int
 	var existingLike bool
 
-	query := "SELECT Id, Is_like FROM Reaction WHERE User_id = ? AND " + targetColumn + " = ?"
+	query := "SELECT Id, Is_like FROM Reaction WHERE User_id = ? AND " + targetColumn + " = ?" // get the reaction the user made before and his ID
 	err := db.QueryRow(query, userID, targetID).Scan(&reactionID, &existingLike)
 
 	switch {
-	case err == sql.ErrNoRows:
+	case err == sql.ErrNoRows: // the user never reacted before -> add a new reaction
 		insert := "INSERT INTO Reaction (User_id, " + targetColumn + ", Is_like) VALUES (?, ?, ?)"
 		_, err = db.Exec(insert, userID, targetID, isLike)
 		return err
 
-	case err != nil:
+	case err != nil: // something wrong happened
 		return err
 
-	default:
-		if existingLike == isLike {
+	default: // we have the reaction type (like or dislike) and his ID
+
+		if existingLike == isLike { // the new reaction is the same as the previous -> delete the old reaction
 			_, err = db.Exec("DELETE FROM Reaction WHERE Id = ?", reactionID)
-		} else {
+		} else { // the new reaction is different of the previous on -> update the reaction
 			_, err = db.Exec("UPDATE Reaction SET Is_like = ? WHERE Id = ?", isLike, reactionID)
 		}
+
 		return err
 	}
 }

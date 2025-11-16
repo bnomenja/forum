@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -174,8 +175,13 @@ func (database Database) authenticateUser(r *http.Request) (int, error) {
 
 	var userID int
 	err = database.Db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		return 0, fmt.Errorf("invalid or expired session: %w", err)
+	}
+
+	if err != nil {
+		fmt.Println("cannot get the user ID", err)
+		return -1, err
 	}
 
 	return userID, nil
@@ -366,17 +372,22 @@ func (database Database) scanComment(rows *sql.Rows) (Comment, error) {
 	}, nil
 }
 
-func isValidInput(input string) bool {
-	if strings.TrimSpace(input) == "" {
-		return false
+func isValidComment(content string) error {
+	if strings.TrimSpace(content) == "" {
+		return errors.New("comment must not be empty")
 	}
 
-	for _, ch := range input {
+	if len(content) > 1000 {
+		return errors.New("maximum chatacters for a comment is 1000")
+	}
+
+	for _, ch := range content {
 		if !unicode.IsPrint(ch) {
-			return false
+			return errors.New("only printable characters are allowed")
 		}
 	}
-	return true
+	
+	return nil
 }
 
 func ExecuteTemplate(w http.ResponseWriter, filename string, data any, statutsCode int) {
@@ -496,6 +507,9 @@ func IsValidCredential(name, email, password string) string {
 	return ""
 }
 
+// GetCategoriesId will get the id of the categories passed as a parameter and return them as a slice of int
+// It will add the category in the database if it hasn't been yet
+// It also return an error if we failed to get an Id or or adding a category
 func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	categories_id := []int{}
 
@@ -522,6 +536,7 @@ func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	return categories_id, nil
 }
 
+// insertInPost_Category will add the created post'Id and all his categories in post-cetgory table
 func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
 	stmt, err := tx.Prepare("INSERT INTO Post_Category(Post_id, Category_id) VALUES (?, ?)")
 	if err != nil {
@@ -615,7 +630,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 
 	default:
 		fmt.Println("react to unknown")
-		RenderError(w, "bad request", 400)
+		RenderError(w, "You can only react to post or comment", 400)
 		return targetId
 	}
 
@@ -708,7 +723,7 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageDat
 
 		if err == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
 			_, err = db.Exec(queryDeleteSession, Session_ID)
-			if err != nil { 
+			if err != nil {
 				fmt.Println(err)
 				RenderError(w, "please try later", 500)
 				return PageData{}, -1, err
@@ -773,4 +788,43 @@ func AreValidCategories(categories []string) bool {
 	}
 
 	return true
+}
+
+func isValidPost(title, content string, categories []string) error {
+	title = strings.TrimSpace(title)
+	content = strings.TrimSpace(content)
+
+	if title == "" || content == "" {
+		return errors.New("please fill all the required field when you create a post")
+	}
+
+	if len(title) > 300 {
+		return errors.New("title can only have 300 characters")
+	}
+
+	if len(content) > 50000 {
+		return errors.New("content can only have 50000 characters")
+	}
+
+	for _, ch := range title {
+		if !unicode.IsPrint(ch) {
+			return errors.New("title can only contains printable characters")
+		}
+	}
+
+	for _, ch := range content {
+		if !unicode.IsPrint(ch) {
+			return errors.New("content can only contains printable characters")
+		}
+	}
+
+	allowed := map[string]bool{"Technology": true, "Science": true, "Art": true, "Gaming": true, "Other": true, "": true}
+
+	for _, category := range categories {
+		if !allowed[category] {
+			return errors.New("you can only select the proposed categories")
+		}
+	}
+
+	return nil
 }

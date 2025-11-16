@@ -12,6 +12,17 @@ func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userId, err := database.authenticateUser(r)
+	if userId == -1 { // something wrong happened
+		RenderError(w, "please try later", 500)
+		return
+	}
+
+	if err == nil { // the user is  loged -> redirect him to home
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
 	switch r.Method {
 
 	case http.MethodGet:

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 )
 
 func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
@@ -13,18 +12,23 @@ func (database Database) CreatePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user_id, err := database.authenticateUser(r)
-	if err != nil {
+	user_id, err := database.authenticateUser(r) // user need to be loged to create post
+	if user_id == -1 { // something wrong happened
+		RenderError(w, "please try later", 500)
+		return
+	}
+
+	if err != nil { // the user is not loged
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		ExecuteTemplate(w, "post.html", nil, 200)
+		ExecuteTemplate(w, "post.html", nil, 200) // just serving the create post page 
 
 	case http.MethodPost:
-		code, err := HandleCreatePost(w, r, &database, user_id)
+		code, err := HandleCreatePost(w, r, &database, user_id) 
 		if err != nil {
 			RenderError(w, err.Error(), code)
 			return
@@ -45,9 +49,11 @@ func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database
 	title := r.FormValue("title")
 	content := r.FormValue("content")
 	Categories := r.Form["categories"]
+	
 
-	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
-		return 400, errors.New("please fill all the required field when you create a post")
+	err := isValidPost(title, content, Categories)
+	if err != nil {
+		return 400, err
 	}
 
 	tx, err := db.Begin()
