@@ -58,11 +58,9 @@ type Comment struct {
 
 const (
 	queryDeleteSession      = `DELETE FROM session WHERE id = ?`
-	queryAddUser            = `INSERT INTO user (name, email, password) VALUES (?, ?, ?)`
-	queryGetUserIDByEmail   = `SELECT id FROM user WHERE email = ?`
 	queryGetUserIDBySession = `SELECT user_id FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP`
 	queryInsertComment      = `INSERT INTO comment(post_id, user_id, content) VALUES (?, ?, ?)`
-	addCookie               = `INSERT INTO session(id, user_id, expire_at) VALUES (?, ?, ?)`
+	addSession              = `INSERT INTO session(id, user_id, expire_at) VALUES (?, ?, ?)`
 	errPageNotFound         = "Page not found"
 	errMethodNotAllowed     = "Method not allowed"
 	errPleaseTryLater       = "Please try later"
@@ -76,7 +74,7 @@ CREATE TABLE IF NOT EXISTS user (
 );
 
 CREATE TABLE IF NOT EXISTS session (
-    id TEXT PRIMARY KEY,
+    id TEXT UNIQUE PRIMARY KEY,
     user_id INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     expire_at DATETIME,
@@ -248,16 +246,28 @@ func IsPrintable(data string) bool {
 }
 
 func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
-	sessionID, err := GenerateSessionID()
-	if err != nil {
-		return fmt.Errorf("failed to generate session id: %v", err)
-	}
+	var sessionID string
+	var expDate time.Time
 
-	expDate := time.Now().Add(24 * time.Hour)
+	for {
+		sessionID, err := GenerateSessionID()
+		if err != nil {
+			return fmt.Errorf("failed to generate session id: %v", err)
+		}
 
-	_, err = db.Exec(addCookie, sessionID, userID, expDate)
-	if err != nil {
-		return fmt.Errorf("failed to add the session in database: %v", err)
+		expDate = time.Now().Add(24 * time.Hour)
+
+		_, err = db.Exec(addSession, sessionID, userID, expDate)
+		if err.Error() == "UNIQUE constraint failed: session.id" {
+			continue
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to add the session in database: %v", err)
+		}
+
+		break
+
 	}
 
 	cookie := &http.Cookie{
