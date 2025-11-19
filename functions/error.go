@@ -42,6 +42,3 @@ func RenderError(w http.ResponseWriter, msg string, code int) {
 		return
 	}
 }
-
-func Check() {
-}

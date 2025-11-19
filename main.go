@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 1{
+	if len(os.Args) != 1 {
 		fmt.Println("usage: go run .")
 		return
 	}
@@ -40,7 +40,7 @@ func main() {
 	http.HandleFunc("/login", database.Login)
 	http.HandleFunc("/register", database.Register)
 	http.HandleFunc("/logout", database.Logout)
-	http.HandleFunc("/create/post", database.CreatePosts)
+	http.HandleFunc("/create/post", database.CreatePost)
 	http.HandleFunc("/posts/", database.CreateComment)
 	http.HandleFunc("/reaction/", database.Reaction)
 	http.HandleFunc("/statics/", functions.Css)
@@ -51,4 +51,3 @@ func main() {
 		fmt.Println(err)
 	}
 }
-

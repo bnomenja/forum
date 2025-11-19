@@ -44,6 +44,8 @@ type Post struct {
 	Comments      []Comment
 	Likes         int
 	Dislikes      int
+	Liked         int // -1 : dislike;  0 : nothing; 1 : like
+	Token         string
 }
 
 type Comment struct {
@@ -54,15 +56,15 @@ type Comment struct {
 	CreationDate string
 	Likes        int
 	Dislikes     int
+	Token        string
+	Liked        int
 }
 
 const (
 	queryDeleteSession      = `DELETE FROM session WHERE id = ?`
-	queryAddUser            = `INSERT INTO user (name, email, password) VALUES (?, ?, ?)`
-	queryGetUserIDByEmail   = `SELECT id FROM user WHERE email = ?`
-	queryGetUserIDBySession = `SELECT user_id FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP`
+	queryGetUserIDBySession = `SELECT user_id, token FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP`
 	queryInsertComment      = `INSERT INTO comment(post_id, user_id, content) VALUES (?, ?, ?)`
-	addCookie               = `INSERT INTO session(id, user_id, expire_at) VALUES (?, ?, ?)`
+	addCookie               = `INSERT INTO session(id, token, user_id, expire_at) VALUES (?, ?, ?, ?)`
 	errPageNotFound         = "Page not found"
 	errMethodNotAllowed     = "Method not allowed"
 	errPleaseTryLater       = "Please try later"
@@ -77,6 +79,7 @@ CREATE TABLE IF NOT EXISTS user (
 
 CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY,
+	token TEXT NOT NULL,
     user_id INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     expire_at DATETIME,
@@ -146,34 +149,26 @@ CREATE TABLE IF NOT EXISTS reaction (
 `
 )
 
-func GenerateSessionID() (string, error) {
-	bytes := make([]byte, 32)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
 // post
-func authenticateUser(r *http.Request, db *sql.DB) (int, error) {
+func authenticateUser(r *http.Request, db *sql.DB) (string, int, error) {
 	cookie, err := r.Cookie("session")
 	if err != nil {
-		return 0, fmt.Errorf("session cookie not found: %w", err)
+		return "", 0, fmt.Errorf("session cookie not found: %w", err)
 	}
 
 	var userID int
-	err = db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID)
+	var storedToken string
+	err = db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID, &storedToken)
 	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("invalid or expired session: %w", err)
+		return "", 0, fmt.Errorf("invalid or expired session: %w", err)
 	}
 
 	if err != nil {
 		fmt.Println("cannot get the user ID", err)
-		return -1, err
+		return "", -1, err
 	}
 
-	return userID, nil
+	return storedToken, userID, nil
 }
 
 // comments
@@ -247,15 +242,34 @@ func IsPrintable(data string) bool {
 	return true
 }
 
-func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
-	sessionID, err := GenerateSessionID()
+func GenerateSessionID() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
 	if err != nil {
-		return fmt.Errorf("failed to generate session id: %v", err)
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func GenerateToken() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
+	sessionID, err1 := GenerateSessionID()
+	token, err2 := GenerateToken()
+	if err1 != nil || err2 != nil {
+		return fmt.Errorf("failed to generate session")
 	}
 
 	expDate := time.Now().Add(24 * time.Hour)
 
-	_, err = db.Exec(addCookie, sessionID, userID, expDate)
+	_, err := db.Exec(addCookie, sessionID, token, userID, expDate)
 	if err != nil {
 		return fmt.Errorf("failed to add the session in database: %v", err)
 	}
@@ -325,57 +339,6 @@ func IsValidCredential(name, email, password string) string {
 	}
 
 	return ""
-}
-
-// GetCategoriesId will get the id of the categories passed as a parameter and return them as a slice of int
-// It will add the category in the database if it hasn't been yet
-// It also return an error if we failed to get an id or or adding a category
-func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
-	categories_id := []int{}
-
-	for _, category := range Categories {
-		var categoryID int
-		err := tx.QueryRow("SELECT id FROM category WHERE type = ?", category).Scan(&categoryID)
-
-		if err == sql.ErrNoRows {
-
-			res, err1 := tx.Exec("INSERT INTO category(type) VALUES (?)", category)
-			if err1 != nil {
-				return nil, err1
-			}
-			id, _ := res.LastInsertId()
-			categoryID = int(id)
-
-		} else if err != nil {
-			return nil, err
-		}
-
-		categories_id = append(categories_id, categoryID)
-
-	}
-	return categories_id, nil
-}
-
-// insertInPost_Category will add the created post'id and all his categories in post-cetgory table
-func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
-	stmt, err := tx.Prepare("INSERT INTO post_category(post_id, category_id) VALUES (?, ?)")
-	if err != nil {
-	}
-
-	defer stmt.Close()
-
-	for _, category_id := range categories_id {
-		_, err := stmt.Exec(postId, category_id)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Request, db *sql.DB) {
@@ -490,9 +453,10 @@ func GetAuthorName(db *sql.DB, post *Post) error {
 }
 
 // Check if the user is loged to have his name and handle all errors related to that
-func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageData, int, error) {
+func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string, PageData, int, error) {
 	var data PageData
 	var user_id int
+	var token string
 
 	cookie, err := r.Cookie("session")
 
@@ -501,46 +465,42 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageDat
 	case nil: // user have a cookie
 		Session_ID := cookie.Value
 
-		err = db.QueryRow("SELECT user_id FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id)
+		err1 := db.QueryRow("SELECT user_id, token FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id, &token)
 
-		if err == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
-			_, err = db.Exec(queryDeleteSession, Session_ID)
-			if err != nil {
-				fmt.Println(err)
+		if err1 == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
+			_, err2 := db.Exec(queryDeleteSession, Session_ID)
+			if err2 != nil {
+				fmt.Println(err2)
 				RenderError(w, "please try later", 500)
-				return PageData{}, -1, err
+				return "", PageData{}, -1, err2
 			}
 
 			RemoveCookie(w)
 
-			return data, user_id, nil
+			return "", PageData{}, -1, nil
 		}
 
-		if err != nil {
+		if err1 != nil { // something wrong happened
 			fmt.Println(err)
 			RenderError(w, "please try later", 500)
-			return PageData{}, -1, err
+			return "", PageData{}, -1, err
 		}
 
 		user_name := ""
-		err = db.QueryRow("SELECT Name FROM User WHERE id = ?", user_id).Scan(&user_name)
-		if err != nil {
-			fmt.Println(err)
+		err3 := db.QueryRow("SELECT Name FROM User WHERE id = ?", user_id).Scan(&user_name)
+		if err3 != nil {
+			fmt.Println(err3)
 			RenderError(w, "please try later", 500)
-			return PageData{}, -1, err
+			return "", PageData{}, -1, err3
 		}
 
 		data.UserName = user_name
 
 	case http.ErrNoCookie: // user doesn't have a cookie -> user is a guest
 
-	default: // something wrong happened
-		fmt.Println("error getting cookie in home", err)
-		RenderError(w, "please try later", 500)
-		return PageData{}, -1, err
 	}
 
-	return data, user_id, nil
+	return token, data, user_id, nil
 }
 
 func RemoveCookie(w http.ResponseWriter) {
@@ -611,7 +571,7 @@ func isValidPost(title, content string, categories []string) error {
 	return nil
 }
 
-func getPosReactions(post *Post, db *sql.DB) error {
+func getPostReactions(post *Post, db *sql.DB) error {
 	queryGetPostReaction := `
 	SELECT
 		(SELECT COUNT(*) FROM reaction r WHERE r.post_id = ? AND r.is_like = true),
@@ -670,7 +630,7 @@ func getPostCategories(post *Post, db *sql.DB) error {
 	return nil
 }
 
-func getPostComments(post *Post, db *sql.DB) error {
+func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) error {
 	rows, err := db.Query(queryGetcomment, post.Id)
 	if err != nil {
 		return err
@@ -695,6 +655,16 @@ func getPostComments(post *Post, db *sql.DB) error {
 			return err
 		}
 
+		newcomment.Token = storedToken
+
+		if userID > 0 {
+			if err := getUserReactOnComments(&newcomment, db, userID); err != nil {
+				return err
+			}
+			
+		} else {
+			newcomment.Liked = 0
+		}
 		newcomment.CreationDate = createdAt.Format("2006 Jan 2 15:04")
 
 		post.Comments = append(post.Comments, newcomment)
@@ -704,7 +674,28 @@ func getPostComments(post *Post, db *sql.DB) error {
 	return nil
 }
 
-func getPost(postId int, db *sql.DB) (*Post, error) {
+func getUserReactOnComments(comment *Comment, db *sql.DB, UserID int) error {
+	var liked bool
+	err := db.QueryRow("SELECT is_like FROM reaction WHERE post_id = ? AND user_id = ?", comment.Id, UserID).Scan(&liked)
+	if err == sql.ErrNoRows {
+		comment.Liked = 0
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if liked {
+		comment.Liked = 1
+	} else {
+		comment.Liked = -1
+	}
+
+	return nil
+}
+
+func getPost(postId int, db *sql.DB, UserID int) (*Post, error) {
 	post, err := getPostBasicInfo(postId, db)
 	if err != nil {
 		return nil, err
@@ -714,7 +705,7 @@ func getPost(postId int, db *sql.DB) (*Post, error) {
 		return nil, err
 	}
 
-	if err := getPosReactions(post, db); err != nil {
+	if err := getPostReactions(post, db); err != nil {
 		return nil, err
 	}
 
@@ -722,7 +713,36 @@ func getPost(postId int, db *sql.DB) (*Post, error) {
 		return nil, err
 	}
 
+	if UserID > 0 {
+		if err := getUserReactOnPost(post, db, UserID); err != nil {
+			return nil, err
+		}
+	} else {
+		post.Liked = 0
+	}
+
 	return post, nil
+}
+
+func getUserReactOnPost(post *Post, db *sql.DB, UserID int) error {
+	var liked bool
+	err := db.QueryRow("SELECT is_like FROM reaction WHERE post_id = ? AND user_id = ?", post.Id, UserID).Scan(&liked)
+	if err == sql.ErrNoRows {
+		post.Liked = 0
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if liked {
+		post.Liked = 1
+	} else {
+		post.Liked = -1
+	}
+
+	return nil
 }
 
 func getPostCommentsNumber(post *Post, db *sql.DB) error {

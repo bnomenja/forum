@@ -76,6 +76,7 @@
 
                     <div class="actions">
                         <form method="POST" action="/reaction/">
+                            <input type="hidden" name="csrf_token" value="{{.Token}}">
                             <input type="hidden" name="id" value="{{.Id}}">
                             <input type="hidden" name="target" value="post">
                             <input type="hidden" name="redirect" value="home">

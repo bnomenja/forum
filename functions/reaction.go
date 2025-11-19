@@ -17,8 +17,8 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := authenticateUser(r, database.Db) // only authenticated user can react
-	if userID == -1 {                               // something wrong happened
+	storedToken, userID, err := authenticateUser(r, database.Db) // only authenticated user can react
+	if userID == -1 {                                            // something wrong happened
 		RenderError(w, "please try later", 500)
 		return
 	}
@@ -28,9 +28,8 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		fmt.Println("Failed to parse form", err)
-		RenderError(w, errPleaseTryLater, 500)
+	if !ValidCSRF(r, storedToken) {
+		RenderError(w, "Forbidden: CSRF Token Invalid", http.StatusForbidden)
 		return
 	}
 

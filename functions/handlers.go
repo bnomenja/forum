@@ -2,23 +2,13 @@ package functions
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 )
 
-func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.DB) {
-	userID, err := authenticateUser(r, db)
-	if userID == -1 { // something wrong happened
-		RenderError(w, "please try later", 500)
-		return
-	}
-
-	if err != nil { // the user is not loged
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-
+func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.DB, userID int) {
 	if err := r.ParseForm(); err != nil {
 		fmt.Println("Failed to parse comment form", err)
 		RenderError(w, "please try later", 500)
@@ -32,7 +22,7 @@ func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.D
 		return
 	}
 
-	_, err = db.Exec(queryInsertComment, post.Id, userID, content)
+	_, err := db.Exec(queryInsertComment, post.Id, userID, content)
 	if err != nil {
 		fmt.Println("Failed to insert comment: %w", err)
 		RenderError(w, errPleaseTryLater, http.StatusInternalServerError)
@@ -78,12 +68,22 @@ func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType strin
 }
 
 // Get post based on the filter(created/liked/categories)
-func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter string) ([]Post, error) {
+func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, storedToken string) ([]Post, error) {
 	posts := []Post{}
 	var rows *sql.Rows
 	var err error
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	guest := false
 
-	switch strings.ToLower(strings.TrimSpace(filter)) {
+	if UserId < 1 {
+		guest = true
+	}
+
+	if guest && (filter == "mine" || filter == "liked") {
+		return nil, errors.New("redirect")
+	}
+
+	switch filter {
 	case "mine": // only get the post created by the user
 		rows, err = db.Query("SELECT id FROM post WHERE user_id = ? ORDER BY created_at DESC", UserId)
 
@@ -96,8 +96,10 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter string
 			ORDER BY p.created_at DESC
 		`, UserId)
 
-	default: // get all the posts
+	case "": // get all the posts
 		rows, err = db.Query("SELECT id FROM post ORDER BY created_at DESC")
+	default:
+		return nil, errors.New("unknown filter")
 	}
 
 	if err != nil {
@@ -119,9 +121,13 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter string
 			return nil, err
 		}
 
-		post, err := getPost(postId, db)
+		post, err := getPost(postId, db, UserId)
 		if err != nil {
 			return nil, err
+		}
+
+		if !guest {
+			post.Token = storedToken
 		}
 
 		// if there is a category filter of the post is rejected ignore the post

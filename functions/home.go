@@ -16,7 +16,7 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, user_id, err := InitializeData(w, r, database.Db)
+	storedToken, data, user_id, err := InitializeData(w, r, database.Db)
 	if err != nil {
 		return
 	}
@@ -35,8 +35,18 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, err := GetFilteredPosts(database.Db, categories, user_id, filter)
+	posts, err := GetFilteredPosts(database.Db, categories, user_id, filter, storedToken)
 	if err != nil {
+		if err.Error() == "redirect" {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		if err.Error() == "unknown filter" {
+			RenderError(w, err.Error(), 400)
+			return
+		}
+
 		fmt.Println("failed to load posts in home", err)
 		RenderError(w, errPleaseTryLater, 500)
 		return

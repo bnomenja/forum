@@ -30,6 +30,7 @@
 
             <div class="actions">
                 <form method="POST" action="/reaction/">
+                    <input type="hidden" name="csrf_token" value="{{.Token}}">
                     <input type="hidden" name="id" value="{{.Id}}">
                     <input type="hidden" name="target" value="post">
                     <input type="hidden" name="redirect" value="comment">
@@ -44,6 +45,7 @@
 
     <section class="add-comment">
         <form method="POST" action="/posts/{{.Id}}">
+             <input type="hidden" name="csrf_token" value="{{.Token}}">
             <textarea name="content" rows="4" placeholder="Write a comment..." maxlength="1000" required></textarea>
             <button type="submit">Comment</button>
         </form>
@@ -61,6 +63,7 @@
             <p class="content">{{.Content}}</p>
             <div class="comment-actions">
                 <form method="POST" action="/reaction/">
+                     <input type="hidden" name="csrf_token" value="{{.Token}}">
                     <input type="hidden" name="id" value="{{.Id}}">
                     <input type="hidden" name="target" value="comment">
                     <button type="submit" name="type" value="like">👍{{.Likes}}</button>
