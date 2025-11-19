@@ -661,7 +661,6 @@ func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) err
 			if err := getUserReactOnComments(&newcomment, db, userID); err != nil {
 				return err
 			}
-			
 		} else {
 			newcomment.Liked = 0
 		}
