@@ -61,7 +61,7 @@ func HandleCreatePost(w http.ResponseWriter, r *http.Request, database *Database
 		return 500, errors.New("failed to create the post")
 	}
 
-	res, err := tx.Exec("INSERT INTO Post(User_id, Title, Content) VALUES (?,?,?)", user_id, title, content)
+	res, err := tx.Exec("INSERT INTO post(user_id, title, content) VALUES (?,?,?)", user_id, title, content)
 	if err != nil {
 		fmt.Println("failed to insert the post in his database", err)
 		tx.Rollback()

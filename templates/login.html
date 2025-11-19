@@ -1,33 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/icones/logo.png">
     <title>Login</title>
-    <link rel="stylesheet" href="/statics/login.css">
+    <link rel="stylesheet" href="/statics/login.css?v1">
 </head>
-
 <body>
-    <div class="login-container">
-        <h1>Login</h1>
 
-        {{if .}}
-        <div class="error">{{.}}</div>
-        {{end}}
+<div class="container">
 
-        <form method="POST" action="/login">
-            <input type="email" name="email" placeholder="email" required>
-            <input type="password" name="password" placeholder="Password" required>
+    <div class="image">
+        <img src="/icones/forum.jpeg">
+    </div>
 
-            <button type="submit">Sign In</button>
-        </form>
+    <div class="parti2">
+        <div class="cart">
+            <form method="POST" action="/login">
+                <h2>Login</h2>
 
-        <div class="register-link">
-            <p>Don't have an account? <a href="/register">Register</a></p>
-            <p>Or you want to stay loged-out?<a href="/">Back to home</a></p>
+                <div class="mrigl">
+                    <div class="inputat">
+                        <label>Username:</label>
+                        <input type="text" name="username" placeholder="username" value="{{ .Username }}" required />
+                        
+                        <label>Password:</label>
+                        <input type="password" name="password" placeholder="password" required />
+                    </div>
+                <button type="submit">Login</button>
+
+                </div>
+
+            </form>
+            <p>If you don't have an account ? <a href="/register">Sign Up</a></p>
+
+        
+            <h4>{{.Message}}</h4>
         </div>
     </div>
-</body>
 
+</div>
+
+</body>
 </html>

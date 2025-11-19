@@ -26,6 +26,7 @@ type Reaction struct {
 	PostId    int
 	Islike    bool
 }
+
 type PageData struct {
 	UserName string
 	Posts    []Post
@@ -37,7 +38,7 @@ type Post struct {
 	Content       string
 	AuthorName    string
 	AuthorId      int
-	CreationDate  time.Time
+	CreationDate  string
 	Categories    []string
 	CommentNumber int
 	Comments      []Comment
@@ -50,104 +51,98 @@ type Comment struct {
 	AuthorId     int
 	AuthorName   string
 	Content      string
-	CreationDate time.Time
+	CreationDate string
 	Likes        int
 	Dislikes     int
 }
 
 const (
-	queryDeleteSession      = `DELETE FROM Session WHERE Id = ?`
-	queryAddUser            = `INSERT INTO User (name, email, password) VALUES (?, ?, ?)`
-	queryGetUserIDByEmail   = `SELECT id FROM User WHERE email = ?`
-	queryGetUserIDBySession = `SELECT User_id FROM Session WHERE Id = ? AND Expires_at > CURRENT_TIMESTAMP`
+	queryDeleteSession      = `DELETE FROM session WHERE id = ?`
+	queryAddUser            = `INSERT INTO user (name, email, password) VALUES (?, ?, ?)`
+	queryGetUserIDByEmail   = `SELECT id FROM user WHERE email = ?`
+	queryGetUserIDBySession = `SELECT user_id FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP`
+	queryInsertComment      = `INSERT INTO comment(post_id, user_id, content) VALUES (?, ?, ?)`
+	addCookie               = `INSERT INTO session(id, user_id, expire_at) VALUES (?, ?, ?)`
+	errPageNotFound         = "Page not found"
+	errMethodNotAllowed     = "Method not allowed"
+	errPleaseTryLater       = "Please try later"
 
-	queryGetUserName       = `SELECT Name FROM User WHERE Id = ?`
-	queryGetPostCategories = `SELECT Category_id FROM Post_Category WHERE Post_id = ?`
-	queryGetPostComments   = `SELECT Id, User_id, Content, Created_at FROM Comment WHERE Post_id = ? ORDER BY Created_at DESC`
-	queryGetCategoryType   = `SELECT Type FROM Category WHERE Id = ?`
-	queryInsertComment     = `INSERT INTO Comment(Post_id, User_id, content) VALUES (?, ?, ?)`
-	updateExpireDate       = `UPDATE Session SET Expires_at = ? WHERE Id = ?`
-	addCookie              = `INSERT INTO Session(Id, User_id, Expires_at) VALUES (?, ?, ?)`
-	errPageNotFound        = "Page not found"
-	errMethodNotAllowed    = "Method not allowed"
-	errPleaseTryLater      = "Please try later"
-	Initialize             = `
-CREATE TABLE IF NOT EXISTS User (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name TEXT UNIQUE NOT NULL,
-    Email TEXT UNIQUE NOT NULL,
-    Password TEXT NOT NULL,
-    Created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	Initialize = `
+CREATE TABLE IF NOT EXISTS user (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS Session (
-    Id TEXT PRIMARY KEY,
-    User_id INTEGER NOT NULL,
-    Created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    Expires_at DATETIME,
-    FOREIGN KEY (User_id) REFERENCES User(Id)
+CREATE TABLE IF NOT EXISTS session (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expire_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-CREATE TABLE IF NOT EXISTS Post (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    User_id INTEGER NOT NULL,
-    Title TEXT NOT NULL,
-    Content TEXT NOT NULL,
-    Created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (User_id) REFERENCES User(Id)
+CREATE TABLE IF NOT EXISTS post (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-CREATE TABLE IF NOT EXISTS Comment (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Post_id INTEGER NOT NULL,
-    User_id INTEGER NOT NULL,
-    Content TEXT NOT NULL,
-    Created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (Post_id) REFERENCES Post(Id),
-    FOREIGN KEY (User_id) REFERENCES User(Id)
+CREATE TABLE IF NOT EXISTS comment (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES post(id),
+    FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-CREATE TABLE IF NOT EXISTS Category (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Type TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS category (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS Post_Category (
-    Post_id INTEGER NOT NULL,
-    Category_id INTEGER NOT NULL,
-    FOREIGN KEY (Post_id) REFERENCES Post(Id),
-    FOREIGN KEY (Category_id) REFERENCES Category(Id),
-    PRIMARY KEY (Post_id, Category_id)
+CREATE TABLE IF NOT EXISTS post_category (
+    post_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    FOREIGN KEY (post_id) REFERENCES post(id),
+    FOREIGN KEY (category_id) REFERENCES category(id),
+    PRIMARY KEY (post_id, category_id)
 );
 
-CREATE TABLE IF NOT EXISTS Reaction (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    User_id INTEGER NOT NULL,
-    Post_id INTEGER,
-    Comment_id INTEGER,
-    Is_like BOOLEAN NOT NULL,
-    Created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (User_id) REFERENCES User(Id),
-    FOREIGN KEY (Post_id) REFERENCES Post(Id),
-    FOREIGN KEY (Comment_id) REFERENCES Comment(Id),
-    CONSTRAINT unique_reaction UNIQUE (User_id, Post_id, Comment_id)
+CREATE TABLE IF NOT EXISTS reaction (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    post_id INTEGER,
+    comment_id INTEGER,
+    is_like BOOLEAN NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (post_id) REFERENCES post(id),
+    FOREIGN KEY (comment_id) REFERENCES comment(id),
+    CONSTRAINT unique_reaction UNIQUE (user_id, post_id, comment_id)
 );
 `
 	queryGetPostDetails = `
-	SELECT p.User_id, p.Title, p.Content, p.Created_at , u.Name
-	FROM Post p
-	Join User u On u.Id = p.User_id
-	WHERE p.Id = ?
+	SELECT p.user_id, p.title, p.content, p.created_at , u.name
+	FROM post p
+	Join user u On u.id = p.user_id
+	WHERE p.id = ?
 	`
 
 	queryGetcomment = `
-	SELECT c.Id, c.User_Id, c.Content, c.Created_at, u.Name,
-    (SELECT COUNT(*) FROM Reaction r WHERE r.Comment_id = c.Id AND r.Is_like = true),
-    (SELECT COUNT(*) FROM Reaction r WHERE r.Comment_id = c.Id AND r.Is_like = false)
-	FROM Comment c
-	JOIN User u ON u.Id = c.User_Id
-	WHERE c.Post_Id = ?
-	ORDER BY c.Created_at DESC;
+	SELECT c.id, c.user_Id, c.content, c.created_at, u.name,
+    (SELECT COUNT(*) FROM reaction r WHERE r.comment_id = c.id AND r.is_like = true),
+    (SELECT COUNT(*) FROM reaction r WHERE r.comment_id = c.id AND r.is_like = false)
+	FROM comment c
+	JOIN user u ON u.id = c.user_Id
+	WHERE c.post_id = ?
+	ORDER BY c.created_at DESC;
 `
 )
 
@@ -158,28 +153,6 @@ func GenerateSessionID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-func SetNewExpireDate(w http.ResponseWriter, db *sql.DB, user_id int, session_id string) error {
-	newExp := time.Now().Add(24 * time.Hour)
-
-	_, err := db.Exec(updateExpireDate, newExp, user_id)
-	if err != nil {
-		return err
-	}
-
-	cookie := &http.Cookie{
-		Name:     "session",
-		Value:    session_id,
-		Path:     "/",
-		Expires:  newExp,
-		HttpOnly: true,
-		Secure:   false,
-	}
-
-	http.SetCookie(w, cookie)
-
-	return nil
 }
 
 // post
@@ -356,17 +329,17 @@ func IsValidCredential(name, email, password string) string {
 
 // GetCategoriesId will get the id of the categories passed as a parameter and return them as a slice of int
 // It will add the category in the database if it hasn't been yet
-// It also return an error if we failed to get an Id or or adding a category
+// It also return an error if we failed to get an id or or adding a category
 func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	categories_id := []int{}
 
 	for _, category := range Categories {
 		var categoryID int
-		err := tx.QueryRow("SELECT Id FROM Category WHERE Type = ?", category).Scan(&categoryID)
+		err := tx.QueryRow("SELECT id FROM category WHERE type = ?", category).Scan(&categoryID)
 
 		if err == sql.ErrNoRows {
 
-			res, err1 := tx.Exec("INSERT INTO Category(Type) VALUES (?)", category)
+			res, err1 := tx.Exec("INSERT INTO category(type) VALUES (?)", category)
 			if err1 != nil {
 				return nil, err1
 			}
@@ -383,9 +356,9 @@ func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	return categories_id, nil
 }
 
-// insertInPost_Category will add the created post'Id and all his categories in post-cetgory table
+// insertInPost_Category will add the created post'id and all his categories in post-cetgory table
 func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
-	stmt, err := tx.Prepare("INSERT INTO Post_Category(Post_id, Category_id) VALUES (?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO post_category(post_id, category_id) VALUES (?, ?)")
 	if err != nil {
 	}
 
@@ -408,10 +381,10 @@ func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
 func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	if target == "comment" {
 		postId := 0
-		db.QueryRow("SELECT Post_id FROM Comment WHERE Id = ?", targetId).Scan(&postId)
-		Id := strconv.Itoa(postId)
+		db.QueryRow("SELECT post_id FROM comment WHERE id = ?", targetId).Scan(&postId)
+		id := strconv.Itoa(postId)
 
-		http.Redirect(w, r, "/posts/"+Id, http.StatusSeeOther)
+		http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
 
 	} else {
 		to := r.FormValue("redirect")
@@ -420,8 +393,8 @@ func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Reques
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		} else {
-			Id := strconv.Itoa(targetId)
-			http.Redirect(w, r, "/posts/"+Id, http.StatusSeeOther)
+			id := strconv.Itoa(targetId)
+			http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
 		}
 
 	}
@@ -439,7 +412,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 		}
 
 		verification := ""
-		err = db.QueryRow("SELECT Content FROM Comment WHERE ID =?", commentId).Scan(&verification)
+		err = db.QueryRow("SELECT content FROM comment WHERE id =?", commentId).Scan(&verification)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				RenderError(w, "this comment doesn't exist", 404)
@@ -461,7 +434,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 		}
 
 		verification := ""
-		err = db.QueryRow("SELECT Title FROM Post WHERE ID =?", postId).Scan(&verification)
+		err = db.QueryRow("SELECT title FROM post WHERE id =?", postId).Scan(&verification)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				RenderError(w, "this post doesn't exist", 404)
@@ -485,7 +458,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 }
 
 func GetReactionNumber(db *sql.DB, post *Post) error {
-	query := "SELECT COUNT(*) FROM Reaction WHERE Post_id = ? AND Is_like = ?"
+	query := "SELECT COUNT(*) FROM reaction WHERE post_id = ? AND is_like = ?"
 
 	err := db.QueryRow(query, post.Id, true).Scan(&post.Likes)
 	if err != nil {
@@ -501,7 +474,7 @@ func GetReactionNumber(db *sql.DB, post *Post) error {
 }
 
 func GetCommentNumber(db *sql.DB, post *Post) error {
-	err := db.QueryRow("SELECT COUNT(*) FROM Comment WHERE Post_id = ?", post.Id).Scan(&post.CommentNumber)
+	err := db.QueryRow("SELECT COUNT(*) FROM comment WHERE post_id = ?", post.Id).Scan(&post.CommentNumber)
 	if err != nil {
 		return err
 	}
@@ -509,7 +482,7 @@ func GetCommentNumber(db *sql.DB, post *Post) error {
 }
 
 func GetAuthorName(db *sql.DB, post *Post) error {
-	err := db.QueryRow("SELECT Name FROM User WHERE Id = ?", post.AuthorId).Scan(&post.AuthorName)
+	err := db.QueryRow("SELECT Name FROM User WHERE id = ?", post.AuthorId).Scan(&post.AuthorName)
 	if err != nil {
 		return err
 	}
@@ -528,7 +501,7 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageDat
 	case nil: // user have a cookie
 		Session_ID := cookie.Value
 
-		err = db.QueryRow("SELECT User_id FROM Session WHERE Id = ? AND Expires_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id)
+		err = db.QueryRow("SELECT user_id FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id)
 
 		if err == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
 			_, err = db.Exec(queryDeleteSession, Session_ID)
@@ -550,7 +523,7 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (PageDat
 		}
 
 		user_name := ""
-		err = db.QueryRow("SELECT Name FROM User WHERE Id = ?", user_id).Scan(&user_name)
+		err = db.QueryRow("SELECT Name FROM User WHERE id = ?", user_id).Scan(&user_name)
 		if err != nil {
 			fmt.Println(err)
 			RenderError(w, "please try later", 500)
@@ -641,8 +614,8 @@ func isValidPost(title, content string, categories []string) error {
 func getPosReactions(post *Post, db *sql.DB) error {
 	queryGetPostReaction := `
 	SELECT
-		(SELECT COUNT(*) FROM Reaction r WHERE r.Post_id = ? AND r.Is_like = 1),
-		(SELECT COUNT(*) FROM Reaction r WHERE r.Post_id = ? AND r.Is_like = 0)
+		(SELECT COUNT(*) FROM reaction r WHERE r.post_id = ? AND r.is_like = true),
+		(SELECT COUNT(*) FROM reaction r WHERE r.post_id = ? AND r.is_like = false)
 	`
 	err := db.QueryRow(queryGetPostReaction, post.Id, post.Id).Scan(&post.Likes, &post.Dislikes)
 	if err != nil {
@@ -653,12 +626,10 @@ func getPosReactions(post *Post, db *sql.DB) error {
 }
 
 func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
-	var authorID int
-	var authorName string
-	var title, content string
+	post := &Post{Id: postID}
 	var createdAt time.Time
 
-	err := db.QueryRow(queryGetPostDetails, postID).Scan(&authorID, &title, &content, &createdAt, &authorName)
+	err := db.QueryRow(queryGetPostDetails, postID).Scan(&post.AuthorId, &post.Title, &post.Content, &createdAt, &post.AuthorName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("post not found")
@@ -666,16 +637,7 @@ func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
 		return nil, fmt.Errorf("failed to query post: %w", err)
 	}
 
-	post := &Post{
-		Id:           postID,
-		AuthorId:     authorID,
-		AuthorName:   authorName,
-		Title:        title,
-		Content:      content,
-		CreationDate: createdAt,
-		Categories:   make([]string, 0),
-		Comments:     make([]Comment, 0),
-	}
+	post.CreationDate = createdAt.Format("2006 Jan 2 15:04")
 
 	return post, nil
 }
@@ -684,8 +646,8 @@ func getPostCategories(post *Post, db *sql.DB) error {
 	query1 := `
 	SELECT c.Type
 	FROM Category c
-	Join Post_Category pc ON pc.Category_id = c.Id
-	WHERE Post_id = ?
+	Join Post_Category pc ON pc.Category_id = c.id
+	WHERE post_id = ?
 	`
 	rows, err := db.Query(query1, post.Id)
 	if err != nil {
@@ -718,12 +680,13 @@ func getPostComments(post *Post, db *sql.DB) error {
 
 	for rows.Next() {
 		newcomment := Comment{}
+		createdAt := time.Time{}
 
 		err := rows.Scan(
 			&newcomment.Id,
 			&newcomment.AuthorId,
 			&newcomment.Content,
-			&newcomment.CreationDate,
+			&createdAt,
 			&newcomment.AuthorName,
 			&newcomment.Likes,
 			&newcomment.Dislikes,
@@ -732,11 +695,11 @@ func getPostComments(post *Post, db *sql.DB) error {
 			return err
 		}
 
+		newcomment.CreationDate = createdAt.Format("2006 Jan 2 15:04")
+
 		post.Comments = append(post.Comments, newcomment)
 
 	}
-
-	post.CommentNumber = len(post.Comments)
 
 	return nil
 }
@@ -755,5 +718,18 @@ func getPost(postId int, db *sql.DB) (*Post, error) {
 		return nil, err
 	}
 
+	if err := getPostCommentsNumber(post, db); err != nil {
+		return nil, err
+	}
+
 	return post, nil
+}
+
+func getPostCommentsNumber(post *Post, db *sql.DB) error {
+	err := db.QueryRow("SELECT COUNT(*) FROM comment  WHERE post_id = ? ", post.Id).Scan(&post.CommentNumber)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

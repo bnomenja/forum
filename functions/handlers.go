@@ -5,129 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 )
-
-func HandleRegister(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	r.ParseForm()
-
-	name := r.FormValue("name")
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-
-	mistakes := IsValidCredential(name, email, password)
-	if mistakes != "" {
-		ExecuteTemplate(w, "register.html", mistakes, 400)
-		return
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		fmt.Println(err)
-		RenderError(w, "Please try later", 500)
-		return
-	}
-
-	_, err = db.Exec(queryAddUser, name, email, string(hash))
-	if err != nil {
-		fmt.Println(err)
-		switch err.Error() {
-		case "UNIQUE constraint failed: User.Name":
-			ExecuteTemplate(w, "register.html", "This name is already used, please select another one", 400)
-
-		case "UNIQUE constraint failed: User.Email":
-			ExecuteTemplate(w, "register.html", "This e-mail is already used, please go to login page to sign-in", 400)
-
-		default:
-			RenderError(w, "please try later", 500)
-		}
-
-		return
-	}
-
-	var user_id int
-
-	err = db.QueryRow(queryGetUserIDByEmail, email).Scan(&user_id)
-	if err != nil {
-		fmt.Println(err)
-		RenderError(w, "Please try later", 500)
-		return
-	}
-
-	err = SetNewSession(w, db, user_id)
-	if err != nil {
-		fmt.Println(err)
-		RenderError(w, "Please try later", 500)
-		return
-	}
-
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func HandleLogin(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	r.ParseForm()
-
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-
-	var storedPassword string
-	var User_id int
-
-	err := db.QueryRow("SELECT Id, Password FROM User WHERE Email =?", email).Scan(&User_id, &storedPassword)
-	if err != nil {
-
-		if err == sql.ErrNoRows {
-			ExecuteTemplate(w, "login.html", "invalid credential", 400)
-			return
-		}
-
-		RenderError(w, "please try later", 500)
-		return
-	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(password))
-	if err != nil {
-		ExecuteTemplate(w, "login.html", "invalid credential", 400)
-		return
-	}
-
-	// delete all user previous session
-	_, err = db.Exec("DELETE FROM Session WHERE User_id = ?", User_id)
-	if err != nil {
-		fmt.Println(err)
-		RenderError(w, "please try later", 500)
-		return
-	}
-
-	var session_id string
-	err = db.QueryRow("SELECT Id FROM Session WHERE User_id = ?", User_id).Scan(&session_id)
-
-	switch err {
-	case nil:
-		err := SetNewExpireDate(w, db, User_id, session_id)
-		if err != nil {
-			fmt.Println(err)
-			RenderError(w, "please try later", 500)
-			return
-		}
-
-	case sql.ErrNoRows:
-		err := SetNewSession(w, db, User_id)
-		if err != nil {
-			fmt.Println(err)
-			RenderError(w, "please try later", 500)
-			return
-		}
-
-	default:
-		fmt.Println(err)
-		RenderError(w, "please try later", 500)
-		return
-	}
-
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
 
 func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.DB) {
 	userID, err := authenticateUser(r, db)
@@ -167,20 +45,20 @@ func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.D
 // Insert the reaction in the reaction table and return an error if something wrong happened
 func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType string) error {
 	isLike := (reactionType == "like") // check if we have a like or a dislike
-	targetColumn := "Post_id"          // if reacted on a post
+	targetColumn := "post_id"          // if reacted on a post
 	if target == "comment" {
-		targetColumn = "Comment_id" // if reacted on a comment
+		targetColumn = "comment_id" // if reacted on a comment
 	}
 
 	var reactionID int
 	var existingLike bool
 
-	query := "SELECT Id, Is_like FROM Reaction WHERE User_id = ? AND " + targetColumn + " = ?" // get the reaction the user made before and his ID
+	query := "SELECT id, is_like FROM reaction WHERE user_id = ? AND " + targetColumn + " = ?" // get the reaction the user made before and his ID
 	err := db.QueryRow(query, userID, targetID).Scan(&reactionID, &existingLike)
 
 	switch {
 	case err == sql.ErrNoRows: // the user never reacted before -> add a new reaction
-		insert := "INSERT INTO Reaction (User_id, " + targetColumn + ", Is_like) VALUES (?, ?, ?)"
+		insert := "INSERT INTO reaction (user_id, " + targetColumn + ", is_like) VALUES (?, ?, ?)"
 		_, err = db.Exec(insert, userID, targetID, isLike)
 		return err
 
@@ -190,9 +68,9 @@ func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType strin
 	default: // we have the reaction type (like or dislike) and his ID
 
 		if existingLike == isLike { // the new reaction is the same as the previous -> delete the old reaction
-			_, err = db.Exec("DELETE FROM Reaction WHERE Id = ?", reactionID)
+			_, err = db.Exec("DELETE FROM reaction WHERE id = ?", reactionID)
 		} else { // the new reaction is different of the previous on -> update the reaction
-			_, err = db.Exec("UPDATE Reaction SET Is_like = ? WHERE Id = ?", isLike, reactionID)
+			_, err = db.Exec("UPDATE reaction SET is_like = ? WHERE id = ?", isLike, reactionID)
 		}
 
 		return err
@@ -207,19 +85,19 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter string
 
 	switch strings.ToLower(strings.TrimSpace(filter)) {
 	case "mine": // only get the post created by the user
-		rows, err = db.Query("SELECT Id FROM Post WHERE User_id = ? ORDER BY Created_at DESC", UserId)
+		rows, err = db.Query("SELECT id FROM post WHERE user_id = ? ORDER BY created_at DESC", UserId)
 
 	case "liked": // only get posts liked by the user. Disliked posts won't be retrieved (we can change this later if we decide to filter by reacted posts)
 		rows, err = db.Query(`
-			SELECT p.Id
-			FROM Post p
-			JOIN Reaction r ON p.Id = r.Post_id
-			WHERE r.User_id = ? AND r.Is_like = true
-			ORDER BY p.Created_at DESC
+			SELECT p.id
+			FROM post p
+			JOIN reaction r ON p.id = r.post_id
+			WHERE r.user_id = ? AND r.is_like = true
+			ORDER BY p.created_at DESC
 		`, UserId)
 
 	default: // get all the posts
-		rows, err = db.Query("SELECT Id FROM Post ORDER BY Created_at DESC")
+		rows, err = db.Query("SELECT id FROM post ORDER BY created_at DESC")
 	}
 
 	if err != nil {

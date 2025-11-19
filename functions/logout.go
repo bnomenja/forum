@@ -16,12 +16,15 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// read cookie
 	cookie, err := r.Cookie("session")
 	if err != nil {
+		// introuvable cookie
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
+	// delete session in the database
 	_, err = database.Db.Exec(queryDeleteSession, cookie.Value)
 	if err != nil {
 		fmt.Println(err)
@@ -29,7 +32,9 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// delete cookie in the browser
 	RemoveCookie(w)
 
+	// redirect to home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
