@@ -14,25 +14,35 @@
   <!-- SAME NAVBAR -->
   <nav class="navbar">
     <a href="/" class="logo">
-      <img src="/assets/icons/logo.png" alt="AGORA">
+      <img src="/assets/icons/logo.png" alt="AGORA Logo">
       <span>AGORA FORUM</span>
     </a>
+
     <div class="user-menu">
+      <!-- IF USER IS LOGGED IN -->
       {{if .UserName}}
-      <img src="/assets/icons/userAvatar.png" alt="User" class="user-avatar">
+      <img src="/assets/icons/userAvatar.png" alt="User Avatar" class="user-avatar">
       <div class="dropdown">
-        <div class="dropdown-user">{{.UserName}}</div>
-        <a href="/create/post">Create Post</a>
+         <div class="dropdown-user">{{.UserName}}</div>
+        <form action="/create/post" method="GET">
+          <button type="submit">Create Post</button>
+        </form>
         <form action="/logout" method="post">
           <input type="hidden" name="csrf_token" value="{{.Token}}">
           <button type="submit">Logout</button>
         </form>
       </div>
+
+      <!-- IF USER IS NOT LOGGED IN (GUEST) -->
       {{else}}
       <img src="/assets/icons/userAvatar.png" alt="Guest" class="user-avatar">
       <div class="dropdown">
-        <a href="/login">Login</a>
-        <a href="/register">Register</a>
+        <form action="/login" method="GET">
+          <button type="submit">Login</button>
+        </form>
+        <form action="/register" method="GET">
+          <button type="submit">Register</button>
+        </form>
       </div>
       {{end}}
     </div>
@@ -50,8 +60,8 @@
         <div class="view-tabs">
           <a href="/" class="tab {{if not .Filter}}active{{end}}">All Posts</a>
           {{if .UserName}}
-          <a href="/?filter=mine" class="tab {{if eq .Filter " mine"}}active{{end}}">My Posts</a>
-          <a href="/?filter=liked" class="tab {{if eq .Filter " liked"}}active{{end}}">Liked Posts</a>
+          <a href="/?filter=mine" class="tab {{if eq .Filter "mine"}}active{{end}}">My Posts</a>
+          <a href="/?filter=liked" class="tab {{if eq .Filter "liked"}}active{{end}}">Liked Posts</a>
           {{end}}
         </div>
 
@@ -60,10 +70,14 @@
           <div class="category-panel">
             <form method="GET" action="/">
               <div class="categories-checkbox">
-                <label class="checkbox-label"><input type="checkbox" name="category" value="Science"> Science</label>
-                <label class="checkbox-label"><input type="checkbox" name="category"value="Technology">Technology</label>
-                <label class="checkbox-label"><input type="checkbox" name="category" value="Art"> Art</label>
-                <label class="checkbox-label"><input type="checkbox" name="category" value="Gaming"> Gaming</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Science">
+                  Science</label>
+                <label class="checkbox-label"><input type="checkbox" name="category"
+                    value="Technology">Technology</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Art">
+                  Art</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Gaming">
+                  Gaming</label>
                 <label class="checkbox-label"><input type="checkbox" name="category" value="Other" checked>Other</label>
               </div>
               <div class="form-actions" style="justify-content:flex-end;border:none;padding-top:1rem;">
@@ -88,30 +102,51 @@
 
         <div class="post-preview">
           <p>{{.Content}}</p>
-          <a href="/posts/{{.Id}}" class="read-more">read more</a>
+          <a href="/posts/{{.Id}}" class="read-more">Show more</a>
         </div>
 
         <div class="post-footer">
+
           <div class="post-categories">
-            {{range .Categories}}<span class="tag">{{.}}</span>{{end}}
+            {{range .Categories}}
+            <span class="tag">{{.}}</span>
+            {{end}}
           </div>
 
+          <!-- FIX: wrap all actions inside ONE flex container -->
           <div class="post-actions">
-            <form action="/reaction/" method="POST" class="reaction-form">
+
+            <form action="/reaction/" method="POST" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{.Token}}">
               <input type="hidden" name="id" value="{{.Id}}">
               <input type="hidden" name="target" value="post">
               <input type="hidden" name="redirect" value="home">
+
               <button type="submit" name="type" value="like" class="action-btn {{if eq .Liked 1}}active{{end}}">
                 <img src="/assets/icons/like.png" alt="Like"> {{.Likes}}
               </button>
+            </form>
+
+            <form action="/reaction/" method="POST" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{.Token}}">
+              <input type="hidden" name="id" value="{{.Id}}">
+              <input type="hidden" name="target" value="post">
+              <input type="hidden" name="redirect" value="home">
+
               <button type="submit" name="type" value="dislike" class="action-btn {{if eq .Liked -1}}active{{end}}">
                 <img src="/assets/icons/dislike.png" alt="Dislike"> {{.Dislikes}}
               </button>
             </form>
-            <a href="/posts/{{.Id}}" class="action-btn comments">{{.CommentNumber}} comments</a>
+
+            <a href="/posts/{{.Id}}" class="comment-btn">
+              <img src="/assets/icons/comment.png" alt="comment icon">
+              {{.CommentNumber}}
+            </a>
+
           </div>
+
         </div>
+
       </article>
       {{end}}
 
@@ -121,7 +156,7 @@
         <h3>No post available</h3>
         <p>be the first to post</p>
         {{if .UserName}}
-        <a href="/create/post/" class="submit-btn">Create Post</a>
+        <a href="/create/post" class="submit-btn">Create Post</a>
         {{end}}
       </div>
       {{end}}

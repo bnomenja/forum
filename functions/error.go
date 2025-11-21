@@ -9,6 +9,7 @@ import (
 	"syscall"
 )
 
+// RenderError renders a custom HTML error page with the given message and status code.
 func RenderError(w http.ResponseWriter, msg string, code int) {
 
 	tmpl, err := template.ParseFiles("templates/error.html")

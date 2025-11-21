@@ -20,7 +20,6 @@
     <div class="user-menu">
       <img src="/assets/icons/userAvatar.png" alt="User Avatar" class="user-avatar">
       <div class="dropdown">
-        <a href="/">Home</a>
         <form action="/logout" method="post">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
           <button type="submit">Logout</button>

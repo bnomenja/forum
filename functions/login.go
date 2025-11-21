@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Login handles login requests and renders the login page or processes credentials.
 func (database Database) Login(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/login" {
 		RenderError(w, "Page not found", 404)
@@ -33,6 +34,7 @@ func (database Database) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleLogin validates user credentials, manages sessions, and logs the user in.
 func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := strings.TrimSpace(r.FormValue("password"))
@@ -40,18 +42,18 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 
 	if username == "" || password == "" {
 		data.Message = "⚠️ plz commplete your identification"
-		ExecuteTemplate(w, "login.html", data, 400)
+		ExecuteTemplate(w, "login.html", data, http.StatusBadRequest)
 		return
 	}
 
-	// Retrieve password from database by username
+
 	var hashedPassword string
 	var userID int
 
 	err := DB.QueryRow(Select_UserID_and_Pw, username).Scan(&userID, &hashedPassword)
 
 	if err == sql.ErrNoRows {
-		data.Message = "❌ user unavailable"
+		data.Message = "❌ Invalid user or password"
 		ExecuteTemplate(w, "login.html", data, http.StatusUnauthorized)
 		return
 
@@ -61,16 +63,17 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 		return
 	}
 
-	// check password
+	
+
 	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		data.Username = username
-		data.Message = "❌ invalid password"
+		data.Message = "❌ Invalid user or password"
 		ExecuteTemplate(w, "login.html", data, http.StatusUnauthorized)
 		return
 	}
 
-	// delete any sesion after now
+	
 	_, err = DB.Exec(Delete_User_Session, userID)
 	if err != nil {
 		fmt.Println(err)
@@ -81,7 +84,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	var sessionID string
 	err = DB.QueryRow(Select_SessionID, userID).Scan(&sessionID)
 
-	// we deleted all the user's previous sessions so there isn't any
+	
 	if err == sql.ErrNoRows {
 		err := SetNewSession(w, DB, userID)
 		if err != nil {
@@ -96,6 +99,6 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 		return
 	}
 
-	// 5️⃣ Redirect to Home
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

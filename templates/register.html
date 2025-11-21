@@ -25,12 +25,12 @@
                 <label>Username</label>
             </div>
             <div class="inputForm">
-                <input class="input" type="text" name="username" placeholder="Enter username" value="{{ .Username }}" maxlength="20" required /></div>
+                <input class="input" type="text" name="username" placeholder="Enter username" value="{{ .Username }}" maxlength="20" minlength="3" required /></div>
                 <div class="flex-column">
                     <label>Email</label>
                 </div>
                 <div class="inputForm">
-                    <input class="input" type="email" name="email" placeholder="Enter your email" value="{{ .Email }}" required/></div>
+                    <input class="input" type="email" name="email" placeholder="Enter your email" value="{{ .Email }}" required /></div>
 
                     <div class="flex-column">
                         <label>Password</label>

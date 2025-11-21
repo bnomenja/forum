@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// SignUp
+// Register handles GET and POST logic for the /register route.
 func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/register" {
 		RenderError(w, "Page not found", 404)
@@ -24,7 +24,7 @@ func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 			RenderError(w, "Method not allowed", 405)
 			return
 		}
-		
+
 		ExecuteTemplate(w, "register.html", nil, 200)
 
 	case http.MethodPost:
@@ -35,6 +35,7 @@ func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleRegister processes user registration, validates data, inserts the user, and creates a session.
 func HandleRegister(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	var data RegisterData
 
@@ -46,7 +47,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	err := IsValidCredentials(&data, password, confirm_password)
 	if err != nil {
 		data.Message = err.Error()
-		ExecuteTemplate(w, "register.html", data, http.StatusUnauthorized)
+		ExecuteTemplate(w, "register.html", data, http.StatusBadRequest)
 		return
 	}
 
@@ -61,7 +62,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	// exist deja ❌
 	if count > 0 {
 		data.Message = "❌ email or username already esist, please change"
-		ExecuteTemplate(w, "register.html", data, http.StatusUnauthorized)
+		ExecuteTemplate(w, "register.html", data, http.StatusConflict)
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// Logout deletes the user's session and clears the session cookie.
 func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/logout" {
 		RenderError(w, "Page not found", 404)
@@ -16,15 +17,15 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// read cookie
+	
 	cookie, err := r.Cookie("session")
 	if err != nil {
-		// introuvable cookie
+		
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
-	// delete session in the database
+	
 	_, err = database.Db.Exec(Delete_Session_by_ID, cookie.Value)
 	if err != nil {
 		fmt.Println(err)
@@ -32,9 +33,8 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// delete cookie in the browser
 	RemoveCookie(w)
 
-	// redirect to home page
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 )
-
+// CreateComment handles displaying a post's comments page and submitting a new comment.
 func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 	postID, err := extractPostID(r.URL.Path)
 	if err != nil {
@@ -14,7 +14,7 @@ func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	storedToken, userID, err1 := authenticateUser(r, database.Db)
-	if userID == -1 { // something wrong happened
+	if userID == -1 {
 		RenderError(w, "please try later", 500)
 		return
 	}
@@ -33,7 +33,7 @@ func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	data := CommentPageData{Post: *post}
 
-	if err1 == nil { // if user is logged
+	if err1 == nil {
 		data.Token = storedToken
 
 		err := database.Db.QueryRow(Select_UserName, userID).Scan(&data.UserName)
@@ -71,6 +71,7 @@ func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getPostWithDetails retrieves a post and loads its comments and metadata (token, user info).
 func getPostWithDetails(postID int, db *sql.DB, storedToken string, userId int) (*Post, error) {
 	post, err := getPost(postID, db, userId)
 	if err != nil {

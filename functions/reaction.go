@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Reaction handles like/dislike actions, validates user/session/CSRF, and redirects back to the source page.
 func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/reaction/" {
 		RenderError(w, errPageNotFound, 404)
@@ -17,13 +18,13 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storedToken, userID, err := authenticateUser(r, database.Db) // only authenticated user can react
-	if userID == -1 {                                            // something wrong happened
+	storedToken, userID, err := authenticateUser(r, database.Db)
+	if userID == -1 {
 		RenderError(w, "please try later", 500)
 		return
 	}
 
-	if err != nil { // the user is not loged
+	if err != nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -37,13 +38,13 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.FormValue("id"))
 	reactionType := strings.TrimSpace(r.FormValue("type"))
 
-	if reactionType != "like" && reactionType != "dislike" { // only like and dislike are allowed
+	if reactionType != "like" && reactionType != "dislike" {
 		fmt.Println("unknown reaction", err)
 		RenderError(w, "bad request", 400)
 		return
 	}
 
-	targetId := getTargetId(target, id, w, database.Db) // ID start at one
+	targetId := getTargetId(target, id, w, database.Db)
 	if targetId < 1 {
 		return
 	}
@@ -53,6 +54,5 @@ func (database Database) Reaction(w http.ResponseWriter, r *http.Request) {
 		RenderError(w, "please try later", 500)
 	}
 
-	// we redirect the user in the same page were he reacted (home page / comment page)
 	Redirect(target, targetId, w, r, database.Db)
 }

@@ -1,16 +1,15 @@
 package functions
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 )
 
+// ServeCss serves CSS/static files securely and blocks directory access.
 func ServeCss(w http.ResponseWriter, r *http.Request) {
 	fileinfo, err := os.Stat(r.URL.Path[1:])
 	if err != nil {
-		RenderError(w, "Please try later", http.StatusInternalServerError)
-		fmt.Println(err)
+		RenderError(w, "page not found", http.StatusNotFound)
 		return
 	}
 

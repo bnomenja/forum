@@ -9,19 +9,20 @@ import (
 	"unicode"
 )
 
+// CreatePost handles the /create/post route and displays or submits the post creation form.
 func (database Database) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/create/post" {
 		RenderError(w, "Page not found", http.StatusNotFound)
 		return
 	}
 
-	storedToken, userID, err := authenticateUser(r, database.Db) // only authenticated user can create a post
-	if userID == -1 {                                            // something wrong happened
+	storedToken, userID, err := authenticateUser(r, database.Db)
+	if userID == -1 {
 		RenderError(w, "please try later", 500)
 		return
 	}
 
-	if err != nil { // the user is not loged
+	if err != nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -45,6 +46,7 @@ func (database Database) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreatePostHandler validates the form, checks CSRF, and inserts the post into the database.
 func CreatePostHandler(w http.ResponseWriter, r *http.Request, db *sql.DB, userID int, storedToken string) {
 	err := r.ParseForm()
 	if err != nil {
@@ -61,6 +63,20 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request, db *sql.DB, userI
 		Title:    r.FormValue("Title"),
 		Content:  r.FormValue("Content"),
 		Category: r.Form["Category"],
+	}
+	seen := map[string]bool{}
+	for _, cat := range post.Category {
+		if seen[cat] {
+			PostPageData := PostPageData{
+				ErrorMessege: errors.New("duplicated category"),
+				Post:         post,
+				CSRFToken:    storedToken,
+			}
+			ExecuteTemplate(w, "post.html", PostPageData, 400)
+			return
+
+		}
+		seen[cat] = true
 	}
 
 	err = validate_post(&post)
@@ -85,6 +101,7 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request, db *sql.DB, userI
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+// validate_post checks title, content, characters, and categories for correctness.
 func validate_post(data *MY_Post) error {
 	title := strings.TrimSpace(data.Title)
 	contenue := strings.TrimSpace(data.Content)
@@ -138,6 +155,7 @@ func validate_post(data *MY_Post) error {
 	return nil
 }
 
+// InsertPostToDB inserts a post and its categories inside a transaction.
 func InsertPostToDB(w http.ResponseWriter, db *sql.DB, data *MY_Post, UserId int) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -168,6 +186,7 @@ func InsertPostToDB(w http.ResponseWriter, db *sql.DB, data *MY_Post, UserId int
 	return nil
 }
 
+// ValidCSRF checks whether the submitted CSRF token matches the stored one.
 func ValidCSRF(r *http.Request, storedToken string) bool {
 	formToken := r.FormValue("csrf_token")
 
@@ -178,9 +197,7 @@ func ValidCSRF(r *http.Request, storedToken string) bool {
 	return true
 }
 
-// getCategoriesID prends un slice de category (string) un retourne un slice de id (int)
-// chaque élément du slic ereprésente un Id de catégory
-// si une catégorie dans le slice of string n'a pas encore été ajouté , alors il sera ajouté après une erreur sql no rows
+// getCategoriesId returns category IDs, creating new categories if they don't exist.
 func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	categories_id := []int{}
 
@@ -207,7 +224,7 @@ func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 	return categories_id, nil
 }
 
-// insertInPost_Category ajoute l'Id du post avec les id de toutes ses catégory dans post_category
+// insertInPost_Category links the post with all its category IDs in post_category.
 func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
 	stmt, err := tx.Prepare(INsert_Post_Category)
 	if err != nil {

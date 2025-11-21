@@ -23,7 +23,7 @@ const (
 	errPleaseTryLater   = "Please try later"
 )
 
-// post
+// authenticateUser verifies the session cookie and returns the stored CSRF token + user ID.
 func authenticateUser(r *http.Request, db *sql.DB) (string, int, error) {
 	cookie, err := r.Cookie("session")
 	if err != nil {
@@ -45,8 +45,8 @@ func authenticateUser(r *http.Request, db *sql.DB) (string, int, error) {
 	return storedToken, userID, nil
 }
 
-// comments
 
+// extractPostID parses a /posts/{id} path and returns the numeric post ID.
 func extractPostID(path string) (int, error) {
 	id := strings.TrimPrefix(path, "/posts/")
 	if id == "" {
@@ -60,7 +60,7 @@ func extractPostID(path string) (int, error) {
 
 	return postID, nil
 }
-
+// isValidComment validates comment content (size, emptiness, printable chars).
 func isValidComment(content string) error {
 	if strings.TrimSpace(content) == "" {
 		return errors.New("comment must not be empty")
@@ -79,6 +79,7 @@ func isValidComment(content string) error {
 	return nil
 }
 
+// ExecuteTemplate parses and executes an HTML template with a buffer-safe write.
 func ExecuteTemplate(w http.ResponseWriter, filename string, data any, statutsCode int) {
 	tmpl, err := template.ParseFiles("templates/" + filename)
 	if err != nil {
@@ -106,6 +107,7 @@ func ExecuteTemplate(w http.ResponseWriter, filename string, data any, statutsCo
 	}
 }
 
+// IsPrintable returns true if all characters in the string are printable.
 func IsPrintable(data string) bool {
 	for _, ch := range data {
 		if !unicode.IsPrint(ch) {
@@ -116,6 +118,7 @@ func IsPrintable(data string) bool {
 	return true
 }
 
+// GenerateToken returns a cryptographically secure random hex token.
 func GenerateToken() (string, error) {
 	bytes := make([]byte, 32)
 	_, err := rand.Read(bytes)
@@ -125,6 +128,7 @@ func GenerateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+// SetNewSession creates a new session + CSRF token and stores them in DB and cookie.
 func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
 	sessionID, err1 := GenerateToken()
 	csrf_token, err2 := GenerateToken()
@@ -153,6 +157,7 @@ func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
 	return nil
 }
 
+// IsValidCredential validates username, email, password format and requirements.
 func IsValidCredential(name, email, password string) string {
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(email) == "" || strings.TrimSpace(password) == "" {
 		return "You must fill all the fields"
@@ -206,8 +211,9 @@ func IsValidCredential(name, email, password string) string {
 	return ""
 }
 
+// Redirect sends the user back to the post or comment page where the reaction happened.
 func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	if target == "comment" { // you reacted on a comment -> redirect to comment page
+	if target == "comment" {
 		postId := 0
 		err := db.QueryRow(Select_PostID, targetId).Scan(&postId)
 		if err != nil {
@@ -217,24 +223,25 @@ func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Reques
 
 		http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
 
-	} else { // you reacted on a post
+	} else {
 		to := r.FormValue("redirect")
 
 		switch to {
-		case "home": // you reacted in the home page -> redirect to home
+		case "home":
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 
-		case "comment": // you reacted in comment page -> redirect to comment page
+		case "comment":
 			id := strconv.Itoa(targetId)
 			http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
 
-		default: // you modified the target
+		default:
 			RenderError(w, "we cannot redirect you there", 400)
 		}
 
 	}
 }
 
+// getTargetId validates target type, converts its ID, and ensures it exists in DB.
 func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 	targetId := -1
 
@@ -292,39 +299,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 	return targetId
 }
 
-func GetReactionNumber(db *sql.DB, post *Post) error {
-	query := "SELECT COUNT(*) FROM reaction WHERE post_id = ? AND is_like = ?"
-
-	err := db.QueryRow(query, post.Id, true).Scan(&post.Likes)
-	if err != nil {
-		return err
-	}
-
-	err = db.QueryRow(query, post.Id, false).Scan(&post.Dislikes)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func GetCommentNumber(db *sql.DB, post *Post) error {
-	err := db.QueryRow("SELECT COUNT(*) FROM comment WHERE post_id = ?", post.Id).Scan(&post.CommentNumber)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func GetAuthorName(db *sql.DB, post *Post) error {
-	err := db.QueryRow("SELECT Name FROM User WHERE id = ?", post.AuthorId).Scan(&post.AuthorName)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Check if the user is loged to have his name and handle all errors related to that
+// InitializeData loads session info (username, CSRF) and returns homepage data.
 func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string, HomePageData, int, error) {
 	var data HomePageData
 	var user_id int
@@ -334,12 +309,12 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string,
 
 	switch err {
 
-	case nil: // user have a cookie
+	case nil: 
 		Session_ID := cookie.Value
 
 		err1 := db.QueryRow(Select_UserId_Csrf_UserName, Session_ID).Scan(&user_id, &token, &user_name)
 
-		if err1 == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
+		if err1 == sql.ErrNoRows { 
 			_, err2 := db.Exec(Delete_Session_by_ID, Session_ID)
 			if err2 != nil {
 				fmt.Println(err2)
@@ -352,7 +327,7 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string,
 			return "", HomePageData{}, -1, nil
 		}
 
-		if err1 != nil { // something wrong happened
+		if err1 != nil { 
 			fmt.Println("a")
 			fmt.Println(err1)
 			RenderError(w, "please try later", 500)
@@ -361,13 +336,14 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string,
 
 		data.UserName = user_name
 
-	case http.ErrNoCookie: // user doesn't have a cookie -> user is a guest
+	case http.ErrNoCookie: 
 
 	}
 
 	return token, data, user_id, nil
 }
 
+// RemoveCookie deletes the session cookie from the user's browser.
 func RemoveCookie(w http.ResponseWriter) {
 	deleteCookie := &http.Cookie{
 		Name:     "session",
@@ -381,6 +357,7 @@ func RemoveCookie(w http.ResponseWriter) {
 	http.SetCookie(w, deleteCookie)
 }
 
+// AreValidCategories checks if all selected categories belong to the allowed set.
 func AreValidCategories(categories []string) bool {
 	if len(categories) == 0 {
 		return true
@@ -403,6 +380,7 @@ func AreValidCategories(categories []string) bool {
 	return true
 }
 
+// getPostCountData loads likes, dislikes, and comments count for a post.
 func getPostCountData(post *Post, db *sql.DB) error {
 	err := db.QueryRow(Select_Number, post.Id, post.Id, post.Id).Scan(&post.Likes, &post.Dislikes, &post.CommentNumber)
 	if err != nil {
@@ -412,6 +390,7 @@ func getPostCountData(post *Post, db *sql.DB) error {
 	return nil
 }
 
+// getPostBasicInfo loads base post fields (title, content, author, date).
 func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
 	post := &Post{Id: postID}
 	var createdAt time.Time
@@ -429,6 +408,7 @@ func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
 	return post, nil
 }
 
+// getPostCategories loads all categories attached to a post.
 func getPostCategories(post *Post, db *sql.DB) error {
 	rows, err := db.Query(Select_Categories, post.Id)
 	if err != nil {
@@ -451,6 +431,7 @@ func getPostCategories(post *Post, db *sql.DB) error {
 	return nil
 }
 
+// getPostComments loads all comments of a post and applies user reactions.
 func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) error {
 	rows, err := db.Query(Select_Comment_Basics, post.Id)
 	if err != nil {
@@ -494,6 +475,7 @@ func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) err
 	return nil
 }
 
+// getUserReactOnComments determines if the user liked or disliked a comment.
 func getUserReactOnComments(comment *Comment, db *sql.DB, UserID int) error {
 	var liked bool
 	err := db.QueryRow(Select_Reacted_On_Comment, comment.Id, UserID).Scan(&liked)
@@ -515,6 +497,7 @@ func getUserReactOnComments(comment *Comment, db *sql.DB, UserID int) error {
 	return nil
 }
 
+// getPost loads all core data related to a post (info, categories, counts, user reaction).
 func getPost(postId int, db *sql.DB, UserID int) (*Post, error) {
 	post, err := getPostBasicInfo(postId, db)
 	if err != nil {
@@ -540,6 +523,7 @@ func getPost(postId int, db *sql.DB, UserID int) (*Post, error) {
 	return post, nil
 }
 
+// getUserReactOnPost checks if the user liked or disliked the post.
 func getUserReactOnPost(post *Post, db *sql.DB, UserID int) error {
 	var liked bool
 	err := db.QueryRow(Select_Reacted_On_Post, post.Id, UserID).Scan(&liked)
@@ -560,7 +544,7 @@ func getUserReactOnPost(post *Post, db *sql.DB, UserID int) error {
 
 	return nil
 }
-
+// Wanted returns true if the post contains any category the user requested.
 func Wanted(allowed map[string]bool, post *Post) bool {
 	for _, postCategory := range post.Categories {
 		if allowed[postCategory] {

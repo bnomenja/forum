@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// handleComment validates and stores a new comment, then reloads the same post page.
 func handleComment(w http.ResponseWriter, r *http.Request, data *CommentPageData, db *sql.DB, userID int) {
 	if err := r.ParseForm(); err != nil {
 		fmt.Println("Failed to parse comment form", err)
@@ -34,35 +35,35 @@ func handleComment(w http.ResponseWriter, r *http.Request, data *CommentPageData
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
 
-// Insert the reaction in the reaction table and return an error if something wrong happened
+// HandleReaction inserts, updates or removes a like/dislike for a post or comment.
 func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType string) error {
-	isLike := (reactionType == "like") // check if we have a like or a dislike
+	isLike := (reactionType == "like")
 
-	targetColumn := "post_id" // if reacted on a post
+	targetColumn := "post_id"
 	if target == "comment" {
-		targetColumn = "comment_id" // if reacted on a comment
+		targetColumn = "comment_id"
 	}
 
 	var reactionID int
 	var existingLike bool
 
-	query := "SELECT id, is_like FROM reaction WHERE user_id = ? AND " + targetColumn + " = ?" // get the reaction the user made before and his ID
+	query := "SELECT id, is_like FROM reaction WHERE user_id = ? AND " + targetColumn + " = ?"
 	err := db.QueryRow(query, userID, targetID).Scan(&reactionID, &existingLike)
 
 	switch {
-	case err == sql.ErrNoRows: // the user never reacted before -> add a new reaction
+	case err == sql.ErrNoRows:
 		insert := "INSERT INTO reaction (user_id, " + targetColumn + ", is_like) VALUES (?, ?, ?)"
 		_, err = db.Exec(insert, userID, targetID, isLike)
 		return err
 
-	case err != nil: // something wrong happened
+	case err != nil:
 		return err
 
-	default: // we have the reaction type (like or dislike) and his ID
+	default:
 
-		if existingLike == isLike { // the new reaction is the same as the previous -> delete the old reaction
+		if existingLike == isLike {
 			_, err = db.Exec("DELETE FROM reaction WHERE id = ?", reactionID)
-		} else { // the new reaction is different of the previous on -> update the reaction
+		} else {
 			_, err = db.Exec("UPDATE reaction SET is_like = ? WHERE id = ?", isLike, reactionID)
 		}
 
@@ -70,7 +71,8 @@ func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType strin
 	}
 }
 
-// Get post based on the filter(created/liked/categories)
+
+// GetFilteredPosts retrieves posts based on the selected filter (mine, liked, or all) and category constraints.
 func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, storedToken string, data *HomePageData) ([]Post, error) {
 	posts := []Post{}
 	var rows *sql.Rows

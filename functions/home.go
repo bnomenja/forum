@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// Home handles the main page, loading posts with optional filters and rendering the homepage.
 func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		RenderError(w, "page not found", 404)

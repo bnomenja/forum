@@ -26,6 +26,12 @@ func main() {
 	}
 	defer db.Close()
 
+	err = db.Ping()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	_, err = db.Exec(functions.Initialize)
 	if err != nil {
 		fmt.Println(err)
