@@ -10,12 +10,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type RegisterData struct {
-	Message  string
-	Username string
-	Email    string
-}
-
 // SignUp
 func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/register" {
@@ -26,6 +20,11 @@ func (database Database) Register(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 
 	case http.MethodGet:
+		if len(r.URL.RawQuery) > 0 {
+			RenderError(w, "Method not allowed", 405)
+			return
+		}
+		
 		ExecuteTemplate(w, "register.html", nil, 200)
 
 	case http.MethodPost:
@@ -53,7 +52,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 
 	//  check if the user exist
 	var count int
-	err = DB.QueryRow("SELECT COUNT(*) FROM user WHERE name = ? OR email = ?", data.Username, data.Email).Scan(&count)
+	err = DB.QueryRow(Select_UserCount, data.Username, data.Email).Scan(&count)
 	if err != nil {
 		RenderError(w, "Please try later", 500)
 		return
@@ -75,10 +74,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	}
 
 	// Enter in database
-	res, err := DB.Exec(
-		"INSERT INTO user (name,  email, password) VALUES (?, ?, ?)",
-		data.Username, data.Email, string(hashedPassword),
-	)
+	res, err := DB.Exec(Insert_User, data.Username, data.Email, string(hashedPassword))
 	if err != nil {
 		fmt.Println("DB exec error:", err)
 		RenderError(w, "Please try later", 500)

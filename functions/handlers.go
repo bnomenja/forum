@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.DB, userID int) {
+func handleComment(w http.ResponseWriter, r *http.Request, data *CommentPageData, db *sql.DB, userID int) {
 	if err := r.ParseForm(); err != nil {
 		fmt.Println("Failed to parse comment form", err)
 		RenderError(w, "please try later", 500)
@@ -18,11 +18,13 @@ func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.D
 	content := strings.TrimSpace(r.FormValue("content"))
 
 	if err := isValidComment(content); err != nil {
-		RenderError(w, err.Error(), http.StatusBadRequest)
+		data.Error = err.Error()
+		data.PrevContent = content
+		ExecuteTemplate(w, "comments.html", data, 400)
 		return
 	}
 
-	_, err := db.Exec(queryInsertComment, post.Id, userID, content)
+	_, err := db.Exec(Insert_Comment, data.Post.Id, userID, content)
 	if err != nil {
 		fmt.Println("Failed to insert comment: %w", err)
 		RenderError(w, errPleaseTryLater, http.StatusInternalServerError)
@@ -35,7 +37,8 @@ func handleComment(w http.ResponseWriter, r *http.Request, post *Post, db *sql.D
 // Insert the reaction in the reaction table and return an error if something wrong happened
 func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType string) error {
 	isLike := (reactionType == "like") // check if we have a like or a dislike
-	targetColumn := "post_id"          // if reacted on a post
+
+	targetColumn := "post_id" // if reacted on a post
 	if target == "comment" {
 		targetColumn = "comment_id" // if reacted on a comment
 	}
@@ -68,7 +71,7 @@ func HandleReaction(db *sql.DB, userID, targetID int, target, reactionType strin
 }
 
 // Get post based on the filter(created/liked/categories)
-func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, storedToken string) ([]Post, error) {
+func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, storedToken string, data *HomePageData) ([]Post, error) {
 	posts := []Post{}
 	var rows *sql.Rows
 	var err error
@@ -85,19 +88,15 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, store
 
 	switch filter {
 	case "mine": // only get the post created by the user
-		rows, err = db.Query("SELECT id FROM post WHERE user_id = ? ORDER BY created_at DESC", UserId)
+		data.Filter = filter
+		rows, err = db.Query(Filter_Mine, UserId)
 
 	case "liked": // only get posts liked by the user. Disliked posts won't be retrieved (we can change this later if we decide to filter by reacted posts)
-		rows, err = db.Query(`
-			SELECT p.id
-			FROM post p
-			JOIN reaction r ON p.id = r.post_id
-			WHERE r.user_id = ? AND r.is_like = true
-			ORDER BY p.created_at DESC
-		`, UserId)
+		data.Filter = filter
+		rows, err = db.Query(Filter_Liked, UserId)
 
 	case "": // get all the posts
-		rows, err = db.Query("SELECT id FROM post ORDER BY created_at DESC")
+		rows, err = db.Query(No_Filter)
 	default:
 		return nil, errors.New("unknown filter")
 	}
@@ -110,6 +109,9 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, store
 	allowed := map[string]bool{}
 
 	for _, category := range categories {
+		if strings.TrimSpace(category) == "" {
+			continue
+		}
 		allowed[category] = true
 	}
 
@@ -131,7 +133,7 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, store
 		}
 
 		// if there is a category filter of the post is rejected ignore the post
-		if len(categories) > 0 && !Wanted(allowed, post) {
+		if len(allowed) > 0 && !Wanted(allowed, post) {
 			continue
 		}
 
@@ -139,14 +141,4 @@ func GetFilteredPosts(db *sql.DB, categories []string, UserId int, filter, store
 	}
 
 	return posts, nil
-}
-
-func Wanted(allowed map[string]bool, post *Post) bool {
-	for _, postCategory := range post.Categories {
-		if allowed[postCategory] {
-			return true
-		}
-	}
-
-	return false
 }

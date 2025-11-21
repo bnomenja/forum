@@ -35,7 +35,7 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, err := GetFilteredPosts(database.Db, categories, user_id, filter, storedToken)
+	posts, err := GetFilteredPosts(database.Db, categories, user_id, filter, storedToken, &data)
 	if err != nil {
 		if err.Error() == "redirect" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -53,6 +53,10 @@ func (database Database) Home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Posts = posts
+
+	if user_id > 0 {
+		data.Token = storedToken
+	}
 
 	ExecuteTemplate(w, "index.html", data, 200)
 }

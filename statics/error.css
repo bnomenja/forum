@@ -1,34 +1,67 @@
-
-.error-page {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background: #f9fafb;
+/* ────────────────────────────────── MINIMAL ERROR PAGE — PNG VERSION ────────────────────────────────── */
+.error-minimal {
+  background: #000000;
+  color: white;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: BlinkMacSystemFont, Roboto, Ubuntu, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
-.error-container {
-    text-align: center;
-    background: #fff;
-    padding: 3rem 4rem;
-    border-radius: 12px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
+.error-minimal-container {
+  text-align: center;
+  padding: 2rem;
 }
 
-.error-code {
-    font-size: 5rem;
-    color: #ef4444;
-    margin: 0;
+.error-x-icon {
+  width: 100px;
+  height: 100px;
+  margin-bottom: 1.8rem;
 }
 
-.error-message {
-    font-size: 1.3rem;
-    color: #444;
-    margin: 1rem 0 2rem;
+.error-title {
+  font-size: 4.8rem;
+  font-weight: 800;
+  margin: 0;
+  color: white;
+  letter-spacing: -0.02em;
 }
 
-.error-container a {
-    text-decoration: none;
-    margin: 0 0.5rem;
+.error-subtitle {
+  font-size: 2.8rem;
+  font-weight: 500;
+  color: #cccccc;
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.btn-parthenon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: white;
+  color: #151717;
+  padding: 1rem 2.6rem;
+  border-radius: 3rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-decoration: none;
+  margin-top: 4.5rem;
+  transition: all 0.35s ease;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+.btn-parthenon:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+  background: #f8f8f8;
+}
+
+.parthenon-icon {
+  width: 34px;
+  height: 34px;
+  filter: brightness(0);
 }

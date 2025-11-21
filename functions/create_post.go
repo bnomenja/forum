@@ -9,24 +9,6 @@ import (
 	"unicode"
 )
 
-type MY_Post struct {
-	Title    string
-	Content  string
-	Category []string
-}
-
-type PostPageData struct {
-	ErrorMessege error
-	Post         MY_Post
-	CSRFToken    string
-}
-
-type ReactionData struct {
-	ContentType     string
-	ContentId       int
-	ContentReaction string
-}
-
 func (database Database) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/create/post" {
 		RenderError(w, "Page not found", http.StatusNotFound)
@@ -48,6 +30,11 @@ func (database Database) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		if len(r.URL.RawQuery) > 0 {
+			RenderError(w, "Method not allowed", 405)
+			return
+		}
+
 		ExecuteTemplate(w, "post.html", PostPageData{CSRFToken: storedToken}, 200)
 
 	case http.MethodPost:
@@ -159,7 +146,7 @@ func InsertPostToDB(w http.ResponseWriter, db *sql.DB, data *MY_Post, UserId int
 
 	defer tx.Rollback()
 
-	result, err := tx.Exec("INSERT INTO post (user_id, title, content) VALUES(?,?,?)", UserId, data.Title, data.Content)
+	result, err := tx.Exec(Insert_Post, UserId, data.Title, data.Content)
 	if err != nil {
 		return err
 	}
@@ -199,11 +186,11 @@ func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 
 	for _, category := range Categories {
 		var categoryID int
-		err := tx.QueryRow("SELECT id FROM category WHERE type = ?", category).Scan(&categoryID)
+		err := tx.QueryRow(Select_CategoryID, category).Scan(&categoryID)
 
 		if err == sql.ErrNoRows {
 
-			res, err1 := tx.Exec("INSERT INTO category(type) VALUES (?)", category)
+			res, err1 := tx.Exec(Insert_Category, category)
 			if err1 != nil {
 				return nil, err1
 			}
@@ -222,7 +209,7 @@ func getCategoriesId(Categories []string, tx *sql.Tx) ([]int, error) {
 
 // insertInPost_Category ajoute l'Id du post avec les id de toutes ses catégory dans post_category
 func insertInPost_Category(tx *sql.Tx, postId int, categories_id []int) error {
-	stmt, err := tx.Prepare("INSERT INTO post_category(post_id, category_id) VALUES (?, ?)")
+	stmt, err := tx.Prepare(INsert_Post_Category)
 	if err != nil {
 	}
 

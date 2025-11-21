@@ -9,11 +9,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type LoginData struct {
-	Message  string
-	Username string
-}
-
 func (database Database) Login(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/login" {
 		RenderError(w, "Page not found", 404)
@@ -22,6 +17,11 @@ func (database Database) Login(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		if len(r.URL.RawQuery) > 0 {
+			RenderError(w, "Method not allowed", 405)
+			return
+		}
+
 		ExecuteTemplate(w, "login.html", nil, 200)
 
 	case http.MethodPost:
@@ -48,7 +48,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	var hashedPassword string
 	var userID int
 
-	err := DB.QueryRow("SELECT id, password FROM user WHERE name = ? ", username).Scan(&userID, &hashedPassword)
+	err := DB.QueryRow(Select_UserID_and_Pw, username).Scan(&userID, &hashedPassword)
 
 	if err == sql.ErrNoRows {
 		data.Message = "❌ user unavailable"
@@ -71,7 +71,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	}
 
 	// delete any sesion after now
-	_, err = DB.Exec("DELETE FROM session where user_id=? ", userID)
+	_, err = DB.Exec(Delete_User_Session, userID)
 	if err != nil {
 		fmt.Println(err)
 		RenderError(w, "please try later", 500)
@@ -79,7 +79,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, DB *sql.DB) {
 	}
 
 	var sessionID string
-	err = DB.QueryRow("SELECT id FROM session WHERE user_id = ?", userID).Scan(&sessionID)
+	err = DB.QueryRow(Select_SessionID, userID).Scan(&sessionID)
 
 	// we deleted all the user's previous sessions so there isn't any
 	if err == sql.ErrNoRows {

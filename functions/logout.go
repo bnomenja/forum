@@ -11,7 +11,7 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodPost {
 		RenderError(w, "Method not allowed", 405)
 		return
 	}
@@ -25,7 +25,7 @@ func (database Database) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// delete session in the database
-	_, err = database.Db.Exec(queryDeleteSession, cookie.Value)
+	_, err = database.Db.Exec(Delete_Session_by_ID, cookie.Value)
 	if err != nil {
 		fmt.Println(err)
 		RenderError(w, "please try later", 500)

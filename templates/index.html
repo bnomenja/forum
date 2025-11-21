@@ -2,96 +2,132 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forum</title>
-    <link rel="stylesheet" href="/statics/index.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGORA FORUM</title>
+  <link rel="icon" href Daryl="/assets/icons/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/statics/index.css">
 </head>
 
 <body>
-    <nav class="navbar">
-        <h1 class="logo">MyForum</h1>
-        <div class="nav-links">
-            {{if .UserName}}
-                <span class="welcome">👋 Welcome, <strong>{{.UserName}}</strong></span>
-                <a href="/create/post" class="btn btn-primary">Create Post</a>
-                <a href="/logout" class="btn btn-secondary">Logout</a>
-            {{else}}
-                <a href="/login" class="btn btn-primary">Login</a>
-                <a href="/register" class="btn btn-secondary">Register</a>
-            {{end}}
+
+  <!-- SAME NAVBAR -->
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <img src="/assets/icons/logo.png" alt="AGORA">
+      <span>AGORA FORUM</span>
+    </a>
+    <div class="user-menu">
+      {{if .UserName}}
+      <img src="/assets/icons/userAvatar.png" alt="User" class="user-avatar">
+      <div class="dropdown">
+        <div class="dropdown-user">{{.UserName}}</div>
+        <a href="/create/post">Create Post</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="{{.Token}}">
+          <button type="submit">Logout</button>
+        </form>
+      </div>
+      {{else}}
+      <img src="/assets/icons/userAvatar.png" alt="Guest" class="user-avatar">
+      <div class="dropdown">
+        <a href="/login">Login</a>
+        <a href="/register">Register</a>
+      </div>
+      {{end}}
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="container">
+
+      <!-- TITLE + TABS (exactly like your screenshot) -->
+      <div class="page-header">
+        <h2 class="page-title">
+          {{if eq .Filter "mine"}}My Posts{{else if eq .Filter "liked"}}Liked Posts{{else}}All Posts{{end}}
+        </h2>
+
+        <div class="view-tabs">
+          <a href="/" class="tab {{if not .Filter}}active{{end}}">All Posts</a>
+          {{if .UserName}}
+          <a href="/?filter=mine" class="tab {{if eq .Filter " mine"}}active{{end}}">My Posts</a>
+          <a href="/?filter=liked" class="tab {{if eq .Filter " liked"}}active{{end}}">Liked Posts</a>
+          {{end}}
         </div>
-    </nav>
 
-    <section class="filters">
-        <details>
-            <summary>🔍 Filters</summary>
-            <div class="filter-content">
-                {{if .UserName}}
-                <div class="filter-section">
-                    <h3>My Activity</h3>
-                    <div class="filter-links">
-                        <a href="/?filter=mine">My Posts</a>
-                        <a href="/?filter=liked">Liked Posts</a>
-                    </div>
-                </div>
-                {{end}}
-
-                <div class="filter-section">
-                    <h3>Categories to display</h3>
-                    <form method="GET" action="/">
-                        <div class="categories">
-                            <label><input type="checkbox" name="category" value="Technology"> Technology</label>
-                            <label><input type="checkbox" name="category" value="Science"> Science</label>
-                            <label><input type="checkbox" name="category" value="Art"> Art</label>
-                            <label><input type="checkbox" name="category" value="Gaming"> Gaming</label>
-                            <label><input type="checkbox" name="category" value="Other"> Other</label>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Apply</button>
-                    </form>
-                </div>
-            </div>
+        <details class="category-filter">
+          <summary>Categories</summary>
+          <div class="category-panel">
+            <form method="GET" action="/">
+              <div class="categories-checkbox">
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Science"> Science</label>
+                <label class="checkbox-label"><input type="checkbox" name="category"value="Technology">Technology</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Art"> Art</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Gaming"> Gaming</label>
+                <label class="checkbox-label"><input type="checkbox" name="category" value="Other" checked>Other</label>
+              </div>
+              <div class="form-actions" style="justify-content:flex-end;border:none;padding-top:1rem;">
+                <button type="submit" class="submit-btn">Apply Filters</button>
+              </div>
+            </form>
+          </div>
         </details>
-    </section>
+      </div>
 
-    <main class="container">
-        {{if .Posts}}
-            {{range .Posts}}
-            <article class="post">
-                <header>
-                    <h2><a href="/posts/{{.Id}}" class="post-title">{{.Title}}</a></h2>
-                    <p class="author">By <strong>{{.AuthorName}}</strong></p>
-                </header>
+      <!-- POSTS LIST -->
+      {{if .Posts}}
+      {{range .Posts}}
+      <article class="post-card">
+        <div class="post-header">
+          <img src="/assets/icons/userAvatar.png" alt="Avatar" class="post-avatar">
+          <div class="post-info">
+            <a href="/posts/{{.Id}}" class="post-title-link">{{.Title}}</a>
+            <p class="post-meta">by {{.AuthorName}} • {{.CreationDate}}</p>
+          </div>
+        </div>
 
-                <section class="content">
-                    <p>{{.Content}}</p>
-                </section>
+        <div class="post-preview">
+          <p>{{.Content}}</p>
+          <a href="/posts/{{.Id}}" class="read-more">read more</a>
+        </div>
 
-                <footer>
-                    <div class="categories">
-                        {{range .Categories}}
-                            <span class="tag">{{.}}</span>
-                        {{end}}
-                    </div>
+        <div class="post-footer">
+          <div class="post-categories">
+            {{range .Categories}}<span class="tag">{{.}}</span>{{end}}
+          </div>
 
-                    <div class="actions">
-                        <form method="POST" action="/reaction/">
-                            <input type="hidden" name="csrf_token" value="{{.Token}}">
-                            <input type="hidden" name="id" value="{{.Id}}">
-                            <input type="hidden" name="target" value="post">
-                            <input type="hidden" name="redirect" value="home">
-                            <button type="submit" name="type" value="like">👍 {{.Likes}}</button>
-                            <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
-                        </form>
-                        <a href="/posts/{{.Id}}" class="comments-link">💬 {{.CommentNumber}}</a>
-                    </div>
-                </footer>
-            </article>
-            {{end}}
-        {{else}}
-            <p class="no-posts">No posts available at the moment.</p>
+          <div class="post-actions">
+            <form action="/reaction/" method="POST" class="reaction-form">
+              <input type="hidden" name="csrf_token" value="{{.Token}}">
+              <input type="hidden" name="id" value="{{.Id}}">
+              <input type="hidden" name="target" value="post">
+              <input type="hidden" name="redirect" value="home">
+              <button type="submit" name="type" value="like" class="action-btn {{if eq .Liked 1}}active{{end}}">
+                <img src="/assets/icons/like.png" alt="Like"> {{.Likes}}
+              </button>
+              <button type="submit" name="type" value="dislike" class="action-btn {{if eq .Liked -1}}active{{end}}">
+                <img src="/assets/icons/dislike.png" alt="Dislike"> {{.Dislikes}}
+              </button>
+            </form>
+            <a href="/posts/{{.Id}}" class="action-btn comments">{{.CommentNumber}} comments</a>
+          </div>
+        </div>
+      </article>
+      {{end}}
+
+      {{else}}
+      <!-- EXACT EMPTY STATE FROM YOUR IMAGE -->
+      <div class="empty-state">
+        <h3>No post available</h3>
+        <p>be the first to post</p>
+        {{if .UserName}}
+        <a href="/create/post/" class="submit-btn">Create Post</a>
         {{end}}
-    </main>
+      </div>
+      {{end}}
+
+    </div>
+  </main>
 </body>
 
 </html>

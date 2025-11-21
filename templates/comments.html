@@ -2,78 +2,152 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - Post</title>
-    <link rel="stylesheet" href="/statics/comment.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{.Post.Title}}</title>
+  <link rel="icon" href="/assets/icons/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/statics/comment.css">
 </head>
 
 <body>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <img src="/assets/icons/logo.png" alt="AGORA Logo">
+      <span>AGORA FORUM</span>
+    </a>
 
-    <article class="post">
-         <a href="/">← Back to Home</a>
-        <header>
-            <h2>{{.Title}}</h2>
-            <p class="author">Posted by <strong>{{.AuthorName}}</strong> on {{.CreationDate}}</p>
-        </header>
-
-        <section class="content">
-            <p>{{.Content}}</p>
-        </section>
-
-        <footer>
-            <div class="categories">
-                {{range .Categories}}
-                <span class="tag">{{.}}</span>
-                {{end}}
-            </div>
-
-            <div class="actions">
-                <form method="POST" action="/reaction/">
-                    <input type="hidden" name="csrf_token" value="{{.Token}}">
-                    <input type="hidden" name="id" value="{{.Id}}">
-                    <input type="hidden" name="target" value="post">
-                    <input type="hidden" name="redirect" value="comment">
-                    <button type="submit" name="type" value="like">👍 {{.Likes}}</button>
-                    <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
-                </form>
-            </div>
-        </footer>
-    </article>
-
-    <hr>
-
-    <section class="add-comment">
-        <form method="POST" action="/posts/{{.Id}}">
-             <input type="hidden" name="csrf_token" value="{{.Token}}">
-            <textarea name="content" rows="4" placeholder="Write a comment..." maxlength="1000" required></textarea>
-            <button type="submit">Comment</button>
+    <div class="user-menu">
+      <!-- IF USER IS LOGGED IN -->
+      {{if .UserName}}
+      <img src="/assets/icons/userAvatar.png" alt="User Avatar" class="user-avatar">
+      <div class="dropdown">
+        <a href="/create/post">Create Post</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="{{.Token}}">
+          <button type="submit">Logout</button>
         </form>
-    </section>
+      </div>
 
+      <!-- IF USER IS NOT LOGGED IN (GUEST) -->
+      {{else}}
+      <img src="/assets/icons/userAvatar.png" alt="Guest" class="user-avatar">
+      <div class="dropdown">
+        <a href="/login">Login</a>
+        <a href="/register">Register</a>
+      </div>
+      {{end}}
+    </div>
+  </nav>
 
-    <hr>
-
-    <section class="comments">
-        <h3>{{.CommentNumber}} Comments</h3>
-
-        {{range .Comments}}
-        <div class="comment">
-            <p class="author">{{.AuthorName}} said:</p>
-            <p class="content">{{.Content}}</p>
-            <div class="comment-actions">
-                <form method="POST" action="/reaction/">
-                     <input type="hidden" name="csrf_token" value="{{.Token}}">
-                    <input type="hidden" name="id" value="{{.Id}}">
-                    <input type="hidden" name="target" value="comment">
-                    <button type="submit" name="type" value="like">👍{{.Likes}}</button>
-                    <button type="submit" name="type" value="dislike">👎 {{.Dislikes}}</button>
-                </form>
-            </div>
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <div class="container">
+      <!-- Post Header -->
+      <div class="post-header">
+        <div class="post-avatar"></div>
+        <div class="post-meta">
+          <div class="post-author">{{.Post.AuthorName}}</div>
+          <div class="post-time">{{.Post.CreationDate}}</div>
         </div>
-        <hr>
+      </div>
+
+      <!-- Title & Content -->
+      <h1 class="post-title">{{.Post.Title}}</h1>
+      <div class="post-content">{{.Post.Content}}</div>
+
+      <!-- Categories -->
+      <br>
+      <div class="categories">
+        {{range .Post.Categories}}
+        <span class="tag">{{.}}</span>
         {{end}}
-    </section>
+      </div>
+
+      <!-- POST REACTIONS -->
+      <div class="actions">
+        <!-- LIKE -->
+        <form action="/reaction/" method="POST" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{.Post.Token}}">
+          <input type="hidden" name="redirect" value="comment">
+          <input type="hidden" name="id" value="{{.Post.Id}}">
+          <input type="hidden" name="target" value="post">
+          <button type="submit" name="type" value="like" class="action-item {{if eq .Post.Liked 1}}active{{end}}">
+            <img src="/assets/icons/like.png" alt="Like">
+            <span class="action-count">{{.Post.Likes}}</span>
+          </button>
+        </form>
+
+        <!-- DISLIKE -->
+        <form action="/reaction/" method="POST" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{.Post.Token}}">
+          <input type="hidden" name="redirect" value="comment">
+          <input type="hidden" name="id" value="{{.Post.Id}}">
+          <input type="hidden" name="target" value="post">
+          <button type="submit" name="type" value="dislike" class="action-item {{if eq .Post.Liked -1}}active{{end}}">
+            <img src="/assets/icons/dislike.png" alt="Dislike">
+            <span class="action-count">{{.Post.Dislikes}}</span>
+          </button>
+        </form>
+
+        <!-- COMMENT COUNT -->
+        <a href="#comment-form" class="action-item">
+          <img src="/assets/icons/comment.png" alt="Comment">
+          <span class="action-count">{{.Post.CommentNumber}}</span>
+        </a>
+      </div>
+
+      <!-- COMMENT ERROR -->
+      {{if .Error}}
+      <div class="error"> {{.Error}}</div>
+      {{end}}
+
+      <!-- COMMENT FORM -->
+      <form class="comment-form" id="comment-form" action="/posts/{{.Post.Id}}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{.Post.Token}}">
+        <textarea class="comment-textarea" name="content" placeholder="Write your comment..." maxlength="1000"
+          required> {{.PrevContent}} </textarea>
+        <button type="submit" class="comment-submit">Post Comment</button>
+      </form>
+
+      <!-- COMMENTS LIST -->
+      <section class="comments-section">
+        {{range .Post.Comments}}
+        <article class="comment">
+          <div class="comment-header">
+            <span class="comment-author">{{.AuthorName}}</span>
+            <span class="comment-time">{{.CreationDate}}</span>
+          </div>
+          <div class="comment-text">{{.Content}}</div>
+
+          <!-- COMMENT REACTIONS -->
+          <div class="comment-actions">
+            <form action="/reaction/" method="POST" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{.Token}}">
+              <input type="hidden" name="id" value="{{.Id}}">
+              <input type="hidden" name="target" value="comment">
+              <button type="submit" name="type" value="like" class="comment-reaction {{if eq .Liked 1}}active{{end}}">
+                <img src="/assets/icons/like.png" alt="Like"> {{.Likes}}
+              </button>
+            </form>
+
+            <form action="/reaction/" method="POST" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{.Token}}">
+              <input type="hidden" name="id" value="{{.Id}}">
+              <input type="hidden" name="target" value="comment">
+              <button type="submit" name="type" value="dislike"
+                class="comment-reaction {{if eq .Liked -1}}active{{end}}">
+                <img src="/assets/icons/dislike.png" alt="Dislike"> {{.Dislikes}}
+              </button>
+            </form>
+          </div>
+        </article>
+        {{else}}
+        <p class="no-comments">No comments yet. Be the first to reply!</p>
+        {{end}}
+      </section>
+    </div>
+  </main>
 </body>
 
 </html>

@@ -9,11 +9,6 @@ import (
 	"syscall"
 )
 
-type ErrorPage struct {
-	Code    int
-	Message string
-}
-
 func RenderError(w http.ResponseWriter, msg string, code int) {
 
 	tmpl, err := template.ParseFiles("templates/error.html")

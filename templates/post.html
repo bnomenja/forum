@@ -1,59 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create_Poste</title>
-    <link rel="stylesheet" href="../static/post.css">
-</head>
-<body>
-  <form action="/create/post" method="POST" class="post-form">
-    <header><h2 class="header">Creat New Post</h2></header>
-        <main class="input">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
-            <section id="title">
-              <label for="Title" class="title">Title:</label>
-              <br>
-              <input type="text" placeholder="title" required id ="Title" name="Title" maxlength="150" class="text" value="{{.Post.Title}}">
-          </section>
-            <section class="contenue">
-              <label for="Contenue"> Contenue:</label>
-              <br>
-              <textarea  id="Contenue" placeholder="Contenue" name="Content" maxlength="50000" required class="text" >{{.Post.Content}}</textarea>
-            </section>
-        </main>
-        <aside>
-           <p>Category</p>
-            <div class="check-group">
-              <input type="checkbox" value="Technology" name="Category" id="Technology" >
-              <label for="Technology">Technology</label>
-            </div>
-            <div class="check-group">
-              <input type="checkbox" value="Sience" id="Sience" name="Category" >
-              <label for="Sience">Sience</label>
-            </div>
-            <div class="check-group">
-              <input type="checkbox" value="Art" id="Art" name="Category">
-              <label for="Art">Art</label>
-            </div>
-            <div class="check-group">
-              <input type="checkbox" value="Gaming" id="Gaming" name="Category" >
-              <label for="Gaming">Gaming</label>
-            </div>
-            <div class="check-group">
-              <input type="checkbox" value="Other" id="Other" name="Category" checked>
-              <label for="Other">Other</label>
-            </div>
-        </aside>
-     <footer>
-        <a href="/" class="cancel-link"><span>Cancel</span></a>
-        <input type="submit" name="submit" id="submit" value="Publier">
-        
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create New Post</title>
+  <link rel="icon" href="/assets/icons/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/statics/post.css">
+</head>
+
+<body>
+
+  <!-- SAME NAVBAR AS POST PAGE -->
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <img src="/assets/icons/logo.png" alt="AGORA Logo">
+      <span>AGORA FORUM</span>
+    </a>
+    <div class="user-menu">
+      <img src="/assets/icons/userAvatar.png" alt="User Avatar" class="user-avatar">
+      <div class="dropdown">
+        <a href="/">Home</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <button type="submit">Logout</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <div class="container">
+      <form action="/create/post" method="POST" class="post-form">
+
+        <h2 class="post-title" style="text-align:center; margin-bottom: 1.5rem;">Create New Post</h2>
+
+        <!-- ERROR MESSAGE -->
         {{if .ErrorMessege}}
-            <div class="error-message"> {{.ErrorMessege}}</div>
+        <div class="error">{{.ErrorMessege}}</div>
         {{end}}
-     </footer>
-  </form>
+
+        <!-- CSRF TOKEN -->
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <!-- TITLE -->
+        <section class="input-group">
+          <label for="Title">Title</label>
+          <input type="text" id="Title" name="Title" placeholder="Enter a catchy title..." maxlength="150" required
+            class="input-field" value="{{.Post.Title}}">
+        </section>
+
+        <!-- CONTENT -->
+        <section class="input-group">
+          <label for="Content">Content</label>
+          <textarea id="Content" name="Content" placeholder="Share your thoughts..." maxlength="50000" required
+            class="textarea-field">{{.Post.Content}}</textarea>
+        </section>
+
+        <!-- CATEGORIES -->
+        <section class="input-group">
+          <label>Categories (select one or more)</label>
+          <div class="categories-checkbox">
+            <label class="checkbox-label"><input type="checkbox" name="Category" value="Science"> Science</label>
+            <label class="checkbox-label"><input type="checkbox" name="Category" value="Technology">Technology</label>
+            <label class="checkbox-label"><input type="checkbox" name="Category" value="Art"> Art</label>
+            <label class="checkbox-label"><input type="checkbox" name="Category" value="Gaming"> Gaming</label>
+            <label class="checkbox-label"><input type="checkbox" name="Category" value="Other" checked>Other</label>
+          </div>
+        </section>
+
+        <!-- BUTTONS -->
+        <div class="form-actions">
+          <a href="/" class="cancel-btn">Cancel</a>
+          <button type="submit" class="submit-btn">Publish Post</button>
+        </div>
+
+      </form>
+    </div>
+  </main>
 </body>
+
 </html>

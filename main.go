@@ -43,7 +43,8 @@ func main() {
 	http.HandleFunc("/create/post", database.CreatePost)
 	http.HandleFunc("/posts/", database.CreateComment)
 	http.HandleFunc("/reaction/", database.Reaction)
-	http.HandleFunc("/statics/", functions.Css)
+	http.HandleFunc("/statics/", functions.ServeCss)
+	http.HandleFunc("/assets/", functions.ServeCss)
 
 	fmt.Println("server started on http://localhost:8080")
 	err = http.ListenAndServe(":8080", nil)

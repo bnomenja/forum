@@ -1,46 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="/icones/logo.png">
-    <title>Login</title>
-    <link rel="stylesheet" href="/statics/login.css?v1">
+    <link rel="stylesheet" href="/statics/login&register.css">
+    <title>Sign In</title>
 </head>
+
 <body>
+        <h1 class="welcome-title">Welcome to AGORA FORUM,  <a href="/"><br><br><span class="homeSpan">Go to Home page by clicking here ↵</span></a></h1>
+    <div class="container">
+        <form class="form" method="POST" action="/login">
+            <h2 class="page-action">Sign in</h2>
 
-<div class="container">
+            {{if .Message}}
+            <div class="error">{{.Message}}</div>
+            {{end}}
 
-    <div class="image">
-        <img src="/icones/forum.jpeg">
+            <div class="flex-column">
+                <label>Username</label>
+            </div>
+            <div class="inputForm">
+                <input type="text" name="username" class="input" placeholder="Enter your Username" required>
+            </div>
+
+            <div class="flex-column">
+                <label>Password</label>
+            </div>
+            <div class="inputForm">
+                <input type="password" name="password" class="input" placeholder="Enter your Password" required
+                    minlength="6" autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="button-submit">Sign In</button>
+
+            <p class="p">
+                Don't have an account?
+                <a href="/register"><span class="span">Sign up</span></a>
+            </p>
+        </form>
     </div>
-
-    <div class="parti2">
-        <div class="cart">
-            <form method="POST" action="/login">
-                <h2>Login</h2>
-
-                <div class="mrigl">
-                    <div class="inputat">
-                        <label>Username:</label>
-                        <input type="text" name="username" placeholder="username" value="{{ .Username }}" required />
-                        
-                        <label>Password:</label>
-                        <input type="password" name="password" placeholder="password" required />
-                    </div>
-                <button type="submit">Login</button>
-
-                </div>
-
-            </form>
-            <p>If you don't have an account ? <a href="/register">Sign Up</a></p>
-
-        
-            <h4>{{.Message}}</h4>
-        </div>
-    </div>
-
-</div>
-
 </body>
+
 </html>

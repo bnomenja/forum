@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func Css(w http.ResponseWriter, r *http.Request) {
+func ServeCss(w http.ResponseWriter, r *http.Request) {
 	fileinfo, err := os.Stat(r.URL.Path[1:])
 	if err != nil {
 		RenderError(w, "Please try later", http.StatusInternalServerError)

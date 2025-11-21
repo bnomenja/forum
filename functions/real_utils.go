@@ -16,137 +16,11 @@ import (
 	"unicode"
 )
 
-type Database struct {
-	Db *sql.DB
-}
-
-type Reaction struct {
-	UserId    int
-	CommentId int
-	PostId    int
-	Islike    bool
-}
-
-type PageData struct {
-	UserName string
-	Posts    []Post
-}
-
-type Post struct {
-	Id            int
-	Title         string
-	Content       string
-	AuthorName    string
-	AuthorId      int
-	CreationDate  string
-	Categories    []string
-	CommentNumber int
-	Comments      []Comment
-	Likes         int
-	Dislikes      int
-	Liked         int // -1 : dislike;  0 : nothing; 1 : like
-	Token         string
-}
-
-type Comment struct {
-	Id           int
-	AuthorId     int
-	AuthorName   string
-	Content      string
-	CreationDate string
-	Likes        int
-	Dislikes     int
-	Token        string
-	Liked        int
-}
-
 const (
-	queryDeleteSession      = `DELETE FROM session WHERE id = ?`
-	queryGetUserIDBySession = `SELECT user_id, token FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP`
-	queryInsertComment      = `INSERT INTO comment(post_id, user_id, content) VALUES (?, ?, ?)`
-	addCookie               = `INSERT INTO session(id, token, user_id, expire_at) VALUES (?, ?, ?, ?)`
-	errPageNotFound         = "Page not found"
-	errMethodNotAllowed     = "Method not allowed"
-	errPleaseTryLater       = "Please try later"
-
-	Initialize = `
-CREATE TABLE IF NOT EXISTS user (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS session (
-    id TEXT PRIMARY KEY,
-	token TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expire_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES user(id)
-);
-
-CREATE TABLE IF NOT EXISTS post (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES user(id)
-);
-
-CREATE TABLE IF NOT EXISTS comment (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (post_id) REFERENCES post(id),
-    FOREIGN KEY (user_id) REFERENCES user(id)
-);
-
-CREATE TABLE IF NOT EXISTS category (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS post_category (
-    post_id INTEGER NOT NULL,
-    category_id INTEGER NOT NULL,
-    FOREIGN KEY (post_id) REFERENCES post(id),
-    FOREIGN KEY (category_id) REFERENCES category(id),
-    PRIMARY KEY (post_id, category_id)
-);
-
-CREATE TABLE IF NOT EXISTS reaction (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    post_id INTEGER,
-    comment_id INTEGER,
-    is_like BOOLEAN NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES user(id),
-    FOREIGN KEY (post_id) REFERENCES post(id),
-    FOREIGN KEY (comment_id) REFERENCES comment(id),
-    CONSTRAINT unique_reaction UNIQUE (user_id, post_id, comment_id)
-);
-`
-	queryGetPostDetails = `
-	SELECT p.user_id, p.title, p.content, p.created_at , u.name
-	FROM post p
-	Join user u On u.id = p.user_id
-	WHERE p.id = ?
-	`
-
-	queryGetcomment = `
-	SELECT c.id, c.user_Id, c.content, c.created_at, u.name,
-    (SELECT COUNT(*) FROM reaction r WHERE r.comment_id = c.id AND r.is_like = true),
-    (SELECT COUNT(*) FROM reaction r WHERE r.comment_id = c.id AND r.is_like = false)
-	FROM comment c
-	JOIN user u ON u.id = c.user_Id
-	WHERE c.post_id = ?
-	ORDER BY c.created_at DESC;
-`
+	addCookie           = `INSERT INTO session(id, token, user_id, expire_at) VALUES (?, ?, ?, ?)`
+	errPageNotFound     = "Page not found"
+	errMethodNotAllowed = "Method not allowed"
+	errPleaseTryLater   = "Please try later"
 )
 
 // post
@@ -158,7 +32,7 @@ func authenticateUser(r *http.Request, db *sql.DB) (string, int, error) {
 
 	var userID int
 	var storedToken string
-	err = db.QueryRow(queryGetUserIDBySession, cookie.Value).Scan(&userID, &storedToken)
+	err = db.QueryRow(Select_UserID_and_Session, cookie.Value).Scan(&userID, &storedToken)
 	if err == sql.ErrNoRows {
 		return "", 0, fmt.Errorf("invalid or expired session: %w", err)
 	}
@@ -242,15 +116,6 @@ func IsPrintable(data string) bool {
 	return true
 }
 
-func GenerateSessionID() (string, error) {
-	bytes := make([]byte, 32)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
 func GenerateToken() (string, error) {
 	bytes := make([]byte, 32)
 	_, err := rand.Read(bytes)
@@ -261,15 +126,15 @@ func GenerateToken() (string, error) {
 }
 
 func SetNewSession(w http.ResponseWriter, db *sql.DB, userID int) error {
-	sessionID, err1 := GenerateSessionID()
-	token, err2 := GenerateToken()
+	sessionID, err1 := GenerateToken()
+	csrf_token, err2 := GenerateToken()
 	if err1 != nil || err2 != nil {
 		return fmt.Errorf("failed to generate session")
 	}
 
 	expDate := time.Now().Add(24 * time.Hour)
 
-	_, err := db.Exec(addCookie, sessionID, token, userID, expDate)
+	_, err := db.Exec(addCookie, sessionID, csrf_token, userID, expDate)
 	if err != nil {
 		return fmt.Errorf("failed to add the session in database: %v", err)
 	}
@@ -342,22 +207,29 @@ func IsValidCredential(name, email, password string) string {
 }
 
 func Redirect(target string, targetId int, w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	if target == "comment" {
+	if target == "comment" { // you reacted on a comment -> redirect to comment page
 		postId := 0
-		db.QueryRow("SELECT post_id FROM comment WHERE id = ?", targetId).Scan(&postId)
+		err := db.QueryRow(Select_PostID, targetId).Scan(&postId)
+		if err != nil {
+			RenderError(w, "please try later", 500)
+		}
 		id := strconv.Itoa(postId)
 
 		http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
 
-	} else {
+	} else { // you reacted on a post
 		to := r.FormValue("redirect")
 
-		if to == "home" {
+		switch to {
+		case "home": // you reacted in the home page -> redirect to home
 			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		} else {
+
+		case "comment": // you reacted in comment page -> redirect to comment page
 			id := strconv.Itoa(targetId)
 			http.Redirect(w, r, "/posts/"+id, http.StatusSeeOther)
+
+		default: // you modified the target
+			RenderError(w, "we cannot redirect you there", 400)
 		}
 
 	}
@@ -375,7 +247,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 		}
 
 		verification := ""
-		err = db.QueryRow("SELECT content FROM comment WHERE id =?", commentId).Scan(&verification)
+		err = db.QueryRow(Verify_CommentID, commentId).Scan(&verification)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				RenderError(w, "this comment doesn't exist", 404)
@@ -397,7 +269,7 @@ func getTargetId(target, id string, w http.ResponseWriter, db *sql.DB) int {
 		}
 
 		verification := ""
-		err = db.QueryRow("SELECT title FROM post WHERE id =?", postId).Scan(&verification)
+		err = db.QueryRow(Verify_PostID, postId).Scan(&verification)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				RenderError(w, "this post doesn't exist", 404)
@@ -453,10 +325,10 @@ func GetAuthorName(db *sql.DB, post *Post) error {
 }
 
 // Check if the user is loged to have his name and handle all errors related to that
-func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string, PageData, int, error) {
-	var data PageData
+func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string, HomePageData, int, error) {
+	var data HomePageData
 	var user_id int
-	var token string
+	var token, user_name string
 
 	cookie, err := r.Cookie("session")
 
@@ -465,33 +337,26 @@ func InitializeData(w http.ResponseWriter, r *http.Request, db *sql.DB) (string,
 	case nil: // user have a cookie
 		Session_ID := cookie.Value
 
-		err1 := db.QueryRow("SELECT user_id, token FROM session WHERE id = ? AND expire_at > CURRENT_TIMESTAMP", Session_ID).Scan(&user_id, &token)
+		err1 := db.QueryRow(Select_UserId_Csrf_UserName, Session_ID).Scan(&user_id, &token, &user_name)
 
 		if err1 == sql.ErrNoRows { // the cookie is expired or invalid -> the user become a guest
-			_, err2 := db.Exec(queryDeleteSession, Session_ID)
+			_, err2 := db.Exec(Delete_Session_by_ID, Session_ID)
 			if err2 != nil {
 				fmt.Println(err2)
 				RenderError(w, "please try later", 500)
-				return "", PageData{}, -1, err2
+				return "", HomePageData{}, -1, err2
 			}
 
 			RemoveCookie(w)
 
-			return "", PageData{}, -1, nil
+			return "", HomePageData{}, -1, nil
 		}
 
 		if err1 != nil { // something wrong happened
-			fmt.Println(err)
+			fmt.Println("a")
+			fmt.Println(err1)
 			RenderError(w, "please try later", 500)
-			return "", PageData{}, -1, err
-		}
-
-		user_name := ""
-		err3 := db.QueryRow("SELECT Name FROM User WHERE id = ?", user_id).Scan(&user_name)
-		if err3 != nil {
-			fmt.Println(err3)
-			RenderError(w, "please try later", 500)
-			return "", PageData{}, -1, err3
+			return "", HomePageData{}, -1, err1
 		}
 
 		data.UserName = user_name
@@ -520,8 +385,14 @@ func AreValidCategories(categories []string) bool {
 	if len(categories) == 0 {
 		return true
 	}
-
-	allowed := map[string]bool{"Technology": true, "Science": true, "Art": true, "Gaming": true, "Other": true}
+	fmt.Println("categories: ", categories)
+	allowed := map[string]bool{
+		"Technology": true,
+		"Science":    true,
+		"Art":        true,
+		"Gaming":     true,
+		"Other":      true,
+	}
 
 	for _, category := range categories {
 		if !allowed[(strings.TrimSpace(category))] {
@@ -532,52 +403,8 @@ func AreValidCategories(categories []string) bool {
 	return true
 }
 
-func isValidPost(title, content string, categories []string) error {
-	title = strings.TrimSpace(title)
-	content = strings.TrimSpace(content)
-
-	if title == "" || content == "" {
-		return errors.New("please fill all the required field when you create a post")
-	}
-
-	if len(title) > 300 {
-		return errors.New("title can only have 300 characters")
-	}
-
-	if len(content) > 50000 {
-		return errors.New("content can only have 50000 characters")
-	}
-
-	for _, ch := range title {
-		if !unicode.IsPrint(ch) {
-			return errors.New("title can only contains printable characters")
-		}
-	}
-
-	for _, ch := range content {
-		if !unicode.IsPrint(ch) {
-			return errors.New("content can only contains printable characters")
-		}
-	}
-
-	allowed := map[string]bool{"Technology": true, "Science": true, "Art": true, "Gaming": true, "Other": true, "": true}
-
-	for _, category := range categories {
-		if !allowed[category] {
-			return errors.New("you can only select the proposed categories")
-		}
-	}
-
-	return nil
-}
-
-func getPostReactions(post *Post, db *sql.DB) error {
-	queryGetPostReaction := `
-	SELECT
-		(SELECT COUNT(*) FROM reaction r WHERE r.post_id = ? AND r.is_like = true),
-		(SELECT COUNT(*) FROM reaction r WHERE r.post_id = ? AND r.is_like = false)
-	`
-	err := db.QueryRow(queryGetPostReaction, post.Id, post.Id).Scan(&post.Likes, &post.Dislikes)
+func getPostCountData(post *Post, db *sql.DB) error {
+	err := db.QueryRow(Select_Number, post.Id, post.Id, post.Id).Scan(&post.Likes, &post.Dislikes, &post.CommentNumber)
 	if err != nil {
 		return err
 	}
@@ -589,7 +416,7 @@ func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
 	post := &Post{Id: postID}
 	var createdAt time.Time
 
-	err := db.QueryRow(queryGetPostDetails, postID).Scan(&post.AuthorId, &post.Title, &post.Content, &createdAt, &post.AuthorName)
+	err := db.QueryRow(Select_Post_Basics, postID).Scan(&post.AuthorId, &post.Title, &post.Content, &createdAt, &post.AuthorName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("post not found")
@@ -603,13 +430,7 @@ func getPostBasicInfo(postID int, db *sql.DB) (*Post, error) {
 }
 
 func getPostCategories(post *Post, db *sql.DB) error {
-	query1 := `
-	SELECT c.Type
-	FROM Category c
-	Join Post_Category pc ON pc.Category_id = c.id
-	WHERE post_id = ?
-	`
-	rows, err := db.Query(query1, post.Id)
+	rows, err := db.Query(Select_Categories, post.Id)
 	if err != nil {
 		return err
 	}
@@ -631,7 +452,7 @@ func getPostCategories(post *Post, db *sql.DB) error {
 }
 
 func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) error {
-	rows, err := db.Query(queryGetcomment, post.Id)
+	rows, err := db.Query(Select_Comment_Basics, post.Id)
 	if err != nil {
 		return err
 	}
@@ -675,7 +496,7 @@ func getPostComments(post *Post, db *sql.DB, storedToken string, userID int) err
 
 func getUserReactOnComments(comment *Comment, db *sql.DB, UserID int) error {
 	var liked bool
-	err := db.QueryRow("SELECT is_like FROM reaction WHERE post_id = ? AND user_id = ?", comment.Id, UserID).Scan(&liked)
+	err := db.QueryRow(Select_Reacted_On_Comment, comment.Id, UserID).Scan(&liked)
 	if err == sql.ErrNoRows {
 		comment.Liked = 0
 		return nil
@@ -704,11 +525,7 @@ func getPost(postId int, db *sql.DB, UserID int) (*Post, error) {
 		return nil, err
 	}
 
-	if err := getPostReactions(post, db); err != nil {
-		return nil, err
-	}
-
-	if err := getPostCommentsNumber(post, db); err != nil {
+	if err := getPostCountData(post, db); err != nil {
 		return nil, err
 	}
 
@@ -725,7 +542,7 @@ func getPost(postId int, db *sql.DB, UserID int) (*Post, error) {
 
 func getUserReactOnPost(post *Post, db *sql.DB, UserID int) error {
 	var liked bool
-	err := db.QueryRow("SELECT is_like FROM reaction WHERE post_id = ? AND user_id = ?", post.Id, UserID).Scan(&liked)
+	err := db.QueryRow(Select_Reacted_On_Post, post.Id, UserID).Scan(&liked)
 	if err == sql.ErrNoRows {
 		post.Liked = 0
 		return nil
@@ -744,11 +561,12 @@ func getUserReactOnPost(post *Post, db *sql.DB, UserID int) error {
 	return nil
 }
 
-func getPostCommentsNumber(post *Post, db *sql.DB) error {
-	err := db.QueryRow("SELECT COUNT(*) FROM comment  WHERE post_id = ? ", post.Id).Scan(&post.CommentNumber)
-	if err != nil {
-		return err
+func Wanted(allowed map[string]bool, post *Post) bool {
+	for _, postCategory := range post.Categories {
+		if allowed[postCategory] {
+			return true
+		}
 	}
 
-	return nil
+	return false
 }

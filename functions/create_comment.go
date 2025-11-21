@@ -31,13 +31,26 @@ func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data := CommentPageData{Post: *post}
+
 	if err1 == nil { // if user is logged
-		post.Token = storedToken
+		data.Token = storedToken
+
+		err := database.Db.QueryRow(Select_UserName, userID).Scan(&data.UserName)
+		if err != nil {
+			RenderError(w, "please try later", 500)
+			return
+		}
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		ExecuteTemplate(w, "comments.html", &post, 200)
+		if len(r.URL.RawQuery) > 0 {
+			RenderError(w, "Method not allowed", 405)
+			return
+		}
+
+		ExecuteTemplate(w, "comments.html", &data, 200)
 
 	case http.MethodPost:
 		if err1 != nil {
@@ -50,7 +63,7 @@ func (database Database) CreateComment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		handleComment(w, r, post, database.Db, userID)
+		handleComment(w, r, &data, database.Db, userID)
 
 	default:
 

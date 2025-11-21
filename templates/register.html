@@ -3,57 +3,58 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/statics/login&register.css">
     <link rel="icon" type="image/png" href="/icones/logo.png">
     <title>Sign Up</title>
-    <link rel="stylesheet" href="/statics/register.css?v1">
 </head>
 
 <body>
+             <h1 class="welcome-title">Welcome to AGORA FORUM,  <a href="/"><br><br><span class="homeSpan">Go to Home page by clicking here ↵</span></a></h1>
+
+
     <div class="container">
+        <form class="form" method="POST" action="/register">
+            <h2 class="page-action">Sign up</h2>
+             {{if .Message}}
+            <div class="error">{{.Message}}</div>
+            {{end}}
 
-        <div class="image">
-            <img src="/icones/forum.jpeg">
-        </div>
 
+            <div class="flex-column">
+                <label>Username</label>
+            </div>
+            <div class="inputForm">
+                <input class="input" type="text" name="username" placeholder="Enter username" value="{{ .Username }}" maxlength="20" required /></div>
+                <div class="flex-column">
+                    <label>Email</label>
+                </div>
+                <div class="inputForm">
+                    <input class="input" type="email" name="email" placeholder="Enter your email" value="{{ .Email }}" required/></div>
 
-        <div class="parti2">
-            <div class="cart">
-                <form method="POST" action="/register">
-                    <h2>Create a New Account</h2>
-                    <div class="mrigl">
-                        <div class="inputat">
-                            <br>
-                            <label>Username:</label>
-                            <input type="text" name="username" placeholder="Enter username" value="{{ .Username }}"
-                                maxlength="20" required />
-                            <br>
-                            <label>Email:</label>
-                            <input type="email" name="email" placeholder="example@email.com" value="{{ .Email }}"
-                                required />
-                            <br>
-                            <label>Password: </label>
-                            <input type="password" name="password" placeholder="Enter password" maxlength="20"
-                                minlength="6" required />
-                            <br>
-                            <label>Confirm Password:</label>
-                            <input type="password" name="confirm_password" placeholder="Re-enter password"
-                                maxlength="20" minlength="6" required />
-                            <button type="submit">Sign Up</button>
+                    <div class="flex-column">
+                        <label>Password</label>
+                    </div>
+                    <div class="inputForm">
+                        <input class="input" type="password" name="password" placeholder="Enter password" maxlength="20" minlength="6"
+                            required />
+                    </div>
 
-                            <div class="link">
-                                If you have an account? <a href="/login">click here</a>
-                                <h4>{{ .Message }}</h4>
-
-                            </div>
-
-                        </div>
+                    <div class="flex-column">
+                        <label>Confirm Password</label>
+                    </div>
+                    <div class="inputForm">
+                        <input class="input" type="password" name="confirm_password" placeholder="Re-enter password" maxlength="20"
+                            minlength="6" required />
 
                     </div>
 
-                </form>
-            </div>
-        </div>
+                    <button type="submit" class="button-submit">Sign In</button>
+
+                    <p class="p">You already have an account?
+                        <a href="/login"><span class="span">Sign in</span></a>
+                    </p>
+        </form>
     </div>
 
 </body>
